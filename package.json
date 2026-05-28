@@ -1,0 +1,38 @@
+{
+  "name": "papering",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "tauri": "PATH=\"$HOME/.cargo/bin:$PATH\" tauri",
+    "tauri:dev": "PATH=\"$HOME/.cargo/bin:$PATH\" tauri dev",
+    "tauri:build": "PATH=\"$HOME/.cargo/bin:$PATH\" tauri build"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.7.1",
+    "@codemirror/lang-markdown": "^6.3.1",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.36.2",
+    "@tauri-apps/api": "^2.2.0",
+    "@tauri-apps/plugin-global-shortcut": "^2.2.0",
+    "motion": "^12.40.0",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@tauri-apps/cli": "^2.2.0",
+    "@types/node": "^22.10.5",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3"
+  }
+}

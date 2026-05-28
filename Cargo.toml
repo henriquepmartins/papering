@@ -1,0 +1,41 @@
+# Cargo workspace.
+#
+# src-tauri/ holds the Tauri shell + IPC commands (the entry point binary).
+# crates/   is where future internal crates land (e.g. papering-search,
+#           papering-fts, papering-watcher) so the Tauri crate stays slim.
+#
+# Build the workspace from the repo root:
+#   cargo check              # all members
+#   cargo check -p papering  # just the shell crate
+#
+# `bun run tauri dev` already runs cargo from inside src-tauri/; the workspace
+# does not change that — it just lets us share lockfile + target/ across crates.
+
+[workspace]
+resolver = "2"
+# Add new crates under crates/ and list them here, e.g. "crates/papering-search".
+members = ["src-tauri"]
+default-members = ["src-tauri"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.77"
+authors = ["Henrique Pereira Martins"]
+license = "Proprietary"
+repository = "https://github.com/henriquepm/papering"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+needless_pass_by_value = "warn"
+redundant_clone = "warn"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+incremental = false

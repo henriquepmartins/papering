@@ -1,0 +1,26 @@
+# Node
+node_modules/
+.pnpm-store/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Rust / Tauri
+target/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Env
+.env*
+!.env.example
+
+# Logs
+*.log
