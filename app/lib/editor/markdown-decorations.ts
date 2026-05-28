@@ -89,11 +89,6 @@ function buildDecorations(view: EditorView): {
   const entries: Entry[] = [];
   const atomicEntries: Entry[] = [];
   const doc = view.state.doc;
-  const selection = view.state.selection.main;
-  const activeLineFrom = doc.lineAt(selection.from).from;
-  const activeLineTo = doc.lineAt(selection.to).to;
-  const cursorOnLine = (from: number, to: number) =>
-    to >= activeLineFrom && from <= activeLineTo;
 
   for (const { from, to } of view.visibleRanges) {
     syntaxTree(view.state).iterate({
@@ -122,37 +117,18 @@ function buildDecorations(view: EditorView): {
           return;
         }
 
-        // Inline/block markdown marks (#, *, **, ~~, `, >).
-        // Shown at full opacity when the cursor is within the wrapped span
-        // (block-level for headers/quotes, parent inline node for emphasis/
-        // code/strike); fully hidden otherwise.
+        // Inline/block markdown marks (#, *, **, ~~, `, >). Always hidden —
+        // the rendered styling (italic, bold, heading size, quote border, …)
+        // is the only signal the user sees. The marker characters stay in the
+        // document but are replaced with empty atomic decorations so caret
+        // navigation skips over them.
         if (MARK_NODES.has(node.name)) {
-          // Fenced-code backticks are left alone (FencedCode block paints them).
-          if (node.name === "CodeMark") {
-            const parentName = node.node.parent?.name;
-            if (parentName === "FencedCode") {
-              if (!cursorOnLine(node.from, node.to)) {
-                entries.push({ from: node.from, to: node.to, deco: HIDE_DECO });
-              }
-              return;
-            }
-          }
-
           const blockLevel = node.name === "HeaderMark" || node.name === "QuoteMark";
-          let visible: boolean;
-          if (blockLevel) {
-            visible = cursorOnLine(node.from, node.to);
-          } else {
-            const parent = node.node.parent;
-            const parentFrom = parent?.from ?? node.from;
-            const parentTo = parent?.to ?? node.to;
-            visible = selection.to >= parentFrom && selection.from <= parentTo;
-          }
-          if (!visible) {
-            let to = node.to;
-            if (blockLevel && doc.sliceString(to, to + 1) === " ") to += 1;
-            entries.push({ from: node.from, to, deco: HIDE_DECO });
-          }
+          let to = node.to;
+          if (blockLevel && doc.sliceString(to, to + 1) === " ") to += 1;
+          const entry = { from: node.from, to, deco: HIDE_DECO };
+          entries.push(entry);
+          atomicEntries.push(entry);
           return;
         }
 
@@ -241,11 +217,10 @@ function buildDecorations(view: EditorView): {
         const closeFrom = matchTo - closeLen;
         const closeTo = matchTo;
         entries.push({ from: openTo, to: closeFrom, deco });
-        const inRange = selection.to >= openFrom && selection.from <= closeTo;
-        if (!inRange) {
-          entries.push({ from: openFrom, to: openTo, deco: HIDE_DECO });
-          entries.push({ from: closeFrom, to: closeTo, deco: HIDE_DECO });
-        }
+        const openEntry = { from: openFrom, to: openTo, deco: HIDE_DECO };
+        const closeEntry = { from: closeFrom, to: closeTo, deco: HIDE_DECO };
+        entries.push(openEntry, closeEntry);
+        atomicEntries.push(openEntry, closeEntry);
       }
     };
     scan(UNDERLINE_RE, 3, 4, UNDERLINE_DECO);
