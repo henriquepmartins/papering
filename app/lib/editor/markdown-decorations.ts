@@ -119,16 +119,19 @@ function buildDecorations(view: EditorView): {
 
         // Inline/block markdown marks (#, *, **, ~~, `, >). Always hidden —
         // the rendered styling (italic, bold, heading size, quote border, …)
-        // is the only signal the user sees. The marker characters stay in the
-        // document but are replaced with empty atomic decorations so caret
-        // navigation skips over them.
+        // is the only signal the user sees. Inline marks are also marked
+        // atomic so arrow keys skip past the hidden chars in one step.
+        // Block-level marks (HeaderMark, QuoteMark) are intentionally NOT
+        // atomic: making the line-leading `# ` atomic confuses CodeMirror's
+        // line-start cursor handling and prevents headings from rendering
+        // / being typed reliably.
         if (MARK_NODES.has(node.name)) {
           const blockLevel = node.name === "HeaderMark" || node.name === "QuoteMark";
           let to = node.to;
           if (blockLevel && doc.sliceString(to, to + 1) === " ") to += 1;
           const entry = { from: node.from, to, deco: HIDE_DECO };
           entries.push(entry);
-          atomicEntries.push(entry);
+          if (!blockLevel) atomicEntries.push(entry);
           return;
         }
 
