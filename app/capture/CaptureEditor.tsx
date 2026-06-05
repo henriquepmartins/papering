@@ -2,12 +2,12 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { EditorView } from "@codemirror/view";
+import { EditorContent } from "@tiptap/react";
 import { AnimatePresence, motion } from "motion/react";
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { createCaptureEditor } from "../lib/editor/setup";
+import { useCaptureEditor } from "../lib/editor/tiptap";
 
 type ResizeDir =
   | "North"
@@ -96,8 +96,6 @@ function formatRelative(unixSeconds: number): string {
 type Popover = null | "shortcuts" | "notes";
 
 export default function CaptureEditor() {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
   const docRef = useRef<string>("");
   const dirtyRef = useRef<boolean>(false);
   const currentPathRef = useRef<string | null>(null);
@@ -121,40 +119,38 @@ export default function CaptureEditor() {
     }
   }, []);
 
+  const editor = useCaptureEditor({
+    onChange: (doc) => {
+      docRef.current = doc;
+      dirtyRef.current = true;
+      setCharCount(doc.length);
+      setTitle(deriveTitle(doc));
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => void flushSave(), SAVE_DEBOUNCE_MS);
+    },
+    onEscape: () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      flushSave().finally(() => {
+        hideCapture().catch((err) => console.error("hide_capture failed", err));
+      });
+    },
+  });
+
+  // Focus + announce ready as soon as the editor instance is available.
   useEffect(() => {
-    if (!hostRef.current) return;
-
-    const view = createCaptureEditor({
-      parent: hostRef.current,
-      onChange: (doc) => {
-        docRef.current = doc;
-        dirtyRef.current = true;
-        setCharCount(doc.length);
-        setTitle(deriveTitle(doc));
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(() => void flushSave(), SAVE_DEBOUNCE_MS);
-      },
-      onEscape: () => {
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        flushSave().finally(() => {
-          hideCapture().catch((err) => console.error("hide_capture failed", err));
-        });
-      },
-    });
-    viewRef.current = view;
-    view.focus();
-
+    if (!editor) return;
+    editor.commands.focus();
     captureReady().catch(() => {});
+  }, [editor]);
 
+  // Flush on window blur and on unmount.
+  useEffect(() => {
     const onWindowBlur = () => void flushSave();
     window.addEventListener("blur", onWindowBlur);
-
     return () => {
       window.removeEventListener("blur", onWindowBlur);
       if (saveTimer.current) clearTimeout(saveTimer.current);
       void flushSave();
-      view.destroy();
-      viewRef.current = null;
     };
   }, [flushSave]);
 
@@ -164,7 +160,7 @@ export default function CaptureEditor() {
       if (e.key === "Escape") {
         e.stopPropagation();
         setPopover(null);
-        viewRef.current?.focus();
+        editor?.commands.focus();
       }
     };
     const onClick = (e: MouseEvent) => {
@@ -190,6 +186,7 @@ export default function CaptureEditor() {
     openNotes: () => {},
     handleNew: () => {},
     handleOpenLastOrNew: () => {},
+    focusEditor: () => {},
   });
 
   const refreshNotes = useCallback(async () => {
@@ -214,16 +211,15 @@ export default function CaptureEditor() {
   const handleNew = async () => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     await flushSave();
-    const view = viewRef.current;
-    if (!view) return;
-    view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" } });
+    if (!editor) return;
+    editor.commands.clearContent(false);
     docRef.current = "";
     dirtyRef.current = false;
     currentPathRef.current = null;
     setCharCount(0);
     setTitle("New note");
     setPopover(null);
-    view.focus();
+    editor.commands.focus();
   };
 
   const handleOpenNote = async (path: string) => {
@@ -231,10 +227,10 @@ export default function CaptureEditor() {
     await flushSave();
     try {
       const content = await loadNote(path);
-      const view = viewRef.current;
-      if (!view) return;
-      view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: content },
+      if (!editor) return;
+      editor.commands.setContent(content, {
+        contentType: "markdown",
+        emitUpdate: false,
       });
       docRef.current = content;
       dirtyRef.current = false;
@@ -242,7 +238,7 @@ export default function CaptureEditor() {
       setCharCount(content.length);
       setTitle(deriveTitle(content));
       setPopover(null);
-      view.focus();
+      editor.commands.focus();
     } catch (err) {
       console.error("load_note failed", err);
     }
@@ -265,12 +261,29 @@ export default function CaptureEditor() {
   actionsRef.current.openNotes = openNotes;
   actionsRef.current.handleNew = handleNew;
   actionsRef.current.handleOpenLastOrNew = handleOpenLastOrNew;
+  actionsRef.current.focusEditor = () => editor?.commands.focus();
 
   // Backend → frontend: global hotkey (⌃⌥N) — resume most recent note or start fresh.
   useEffect(() => {
     const win = getCurrentWindow();
     const unlistenPromise = win.listen("pap://open-last-or-new", () => {
       void actionsRef.current.handleOpenLastOrNew();
+    });
+    return () => {
+      unlistenPromise.then((u) => u()).catch(() => {});
+    };
+  }, []);
+
+  // WebKit weakens `backdrop-filter` on unfocused windows (no CSS opt-out), so
+  // the panel turns too transparent when it loses focus. Flag focus state on the
+  // root element so CSS can raise the shell's background opacity to compensate,
+  // keeping the frosted look roughly constant like Raycast.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.winFocused = "true";
+    const win = getCurrentWindow();
+    const unlistenPromise = win.onFocusChanged(({ payload: focused }) => {
+      root.dataset.winFocused = focused ? "true" : "false";
     });
     return () => {
       unlistenPromise.then((u) => u()).catch(() => {});
@@ -287,7 +300,7 @@ export default function CaptureEditor() {
         e.stopPropagation();
         setPopover((p) => {
           const next = p === "shortcuts" ? null : "shortcuts";
-          if (next === null) viewRef.current?.focus();
+          if (next === null) actionsRef.current.focusEditor();
           return next;
         });
       } else if (key === "o") {
@@ -309,10 +322,7 @@ export default function CaptureEditor() {
       await deleteNote(path);
       // If the deleted note is the currently open one, clear the editor too.
       if (currentPathRef.current === path) {
-        const view = viewRef.current;
-        if (view) {
-          view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: "" } });
-        }
+        editor?.commands.clearContent(false);
         docRef.current = "";
         dirtyRef.current = false;
         currentPathRef.current = null;
@@ -362,7 +372,7 @@ export default function CaptureEditor() {
             )}
           </AnimatePresence>
         </header>
-        <div ref={hostRef} className="editor-host" />
+        <EditorContent editor={editor} className="editor-host" />
         <footer className="capture-hints" aria-hidden="true">
           <span className="capture-hints__count">{charCount} characters</span>
           <button type="button" className="capture-hints__format" title="Formatting">

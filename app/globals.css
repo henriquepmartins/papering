@@ -54,6 +54,13 @@
     cursor: text;
   }
 
+  /* Task-list checkboxes are interactive — restore pointer cursor that the
+     blanket `cursor: text` above would otherwise override. */
+  .editor-host input[type="checkbox"],
+  .editor-host ul[data-type="taskList"] > li > label {
+    cursor: pointer;
+  }
+
   /* Outer frame: invisible padding around the visible card so tooltips can
      render above the icons, outside the rounded shell. The OS window itself
      is `transparent: true` so this padding shows the desktop directly. */
@@ -69,72 +76,85 @@
      missing grab regions in the transparent padding zone. */
   .capture-resize {
     position: absolute;
-    background: transparent;
-    z-index: 10;
+    /* Alpha must be >= 1/255 (≈0.0039) so the 8-bit compositor never rounds it
+       to 0. On a `transparent: true` macOS window the OS derives the clickable
+       window shape from rendered pixel alpha: a fully-transparent pixel is
+       click-through, so mousedown never reaches the band and resize silently
+       fails. (The old 0.001 rounded to 0 — that was the bug.) This keeps the
+       band invisible while making it hit-testable. */
+    background: rgba(0, 0, 0, 0.004);
   }
-  /* Insets are computed from `.capture-window`'s padding (50px 20px 10px) so
-     each handle is centered on the visible shell border. Corners are 20×20
-     centered on the shell corner; edges are a 6px band straddling the border
-     between corners. */
+  /* The four edges fully tile the transparent padding frame (50px 20px 10px),
+     each spanning its whole side and filling that side's padding thickness, so
+     the entire border around the visible card is grabbable. Edges stop exactly
+     at the card border, touching but never overlapping the interactive shell or
+     its `data-tauri-drag-region` titlebar. Overlaps occur only in the corners,
+     where z-index resolves them deterministically: corners (12) > N/S (11) >
+     W/E (10). */
   .capture-resize--n {
-    top: 47px;            /* 50 − 3 */
-    left: 30px;           /* 20 + 10 (corner width) */
-    right: 30px;
-    height: 6px;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
     cursor: ns-resize;
+    z-index: 11;
   }
   .capture-resize--s {
-    bottom: 7px;          /* 10 − 3 */
-    left: 30px;
-    right: 30px;
-    height: 6px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 10px;
     cursor: ns-resize;
+    z-index: 11;
   }
   .capture-resize--w {
-    top: 60px;            /* 50 + 10 */
-    bottom: 20px;         /* 10 + 10 */
-    left: 17px;           /* 20 − 3 */
-    width: 6px;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 20px;
     cursor: ew-resize;
+    z-index: 10;
   }
   .capture-resize--e {
-    top: 60px;
-    bottom: 20px;
-    right: 17px;
-    width: 6px;
-    cursor: ew-resize;
-  }
-  .capture-resize--nw {
-    top: 40px;            /* 50 − 10 */
-    left: 10px;           /* 20 − 10 */
+    top: 0;
+    bottom: 0;
+    right: 0;
     width: 20px;
-    height: 20px;
+    cursor: ew-resize;
+    z-index: 10;
+  }
+  /* 28×28 corners override the edges in the diagonal zones. */
+  .capture-resize--nw {
+    top: 0;
+    left: 0;
+    width: 28px;
+    height: 28px;
     cursor: nwse-resize;
-    z-index: 11;
+    z-index: 12;
   }
   .capture-resize--ne {
-    top: 40px;
-    right: 10px;
-    width: 20px;
-    height: 20px;
+    top: 0;
+    right: 0;
+    width: 28px;
+    height: 28px;
     cursor: nesw-resize;
-    z-index: 11;
+    z-index: 12;
   }
   .capture-resize--sw {
-    bottom: 0px;          /* 10 − 10 */
-    left: 10px;
-    width: 20px;
-    height: 20px;
+    bottom: 0;
+    left: 0;
+    width: 28px;
+    height: 28px;
     cursor: nesw-resize;
-    z-index: 11;
+    z-index: 12;
   }
   .capture-resize--se {
-    bottom: 0px;
-    right: 10px;
-    width: 20px;
-    height: 20px;
+    bottom: 0;
+    right: 0;
+    width: 28px;
+    height: 28px;
     cursor: nwse-resize;
-    z-index: 11;
+    z-index: 12;
   }
 
   .capture-shell {
@@ -153,14 +173,27 @@
     background:
       linear-gradient(
         180deg,
-        rgba(242, 242, 242, 0.88) 0%,
-        rgba(242, 242, 242, 0.82) 100%
+        rgba(240, 240, 240, 0.86) 0%,
+        rgba(240, 240, 240, 0.8) 100%
       );
-    backdrop-filter: blur(30px) saturate(1.4);
-    -webkit-backdrop-filter: blur(30px) saturate(1.4);
+    backdrop-filter: blur(48px) saturate(1.9);
+    -webkit-backdrop-filter: blur(48px) saturate(1.9);
     box-shadow:
       inset 0 0 0 1px rgba(0, 0, 0, 0.06),
       inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    transition: background 160ms ease;
+  }
+
+  /* When the window loses focus WebKit fades `backdrop-filter` toward zero, so
+     the panel would show the desktop through it. Raise the solid fill to keep
+     the panel opaque/frosted-looking even with the blur gone. */
+  :root[data-win-focused="false"] .capture-shell {
+    background:
+      linear-gradient(
+        180deg,
+        rgba(242, 242, 242, 0.97) 0%,
+        rgba(242, 242, 242, 0.95) 100%
+      );
   }
 
   .capture-shell > .editor-host {
@@ -489,28 +522,232 @@
     font-size: 12px;
   }
 
-  /* Live-markdown widgets */
-  .pap-bullet-widget {
-    display: inline-block;
-    width: 1.1em;
-    color: var(--color-text-muted);
-    font-weight: 700;
-    text-align: left;
+  /* Tiptap editor surface — the .tiptap class is set in useCaptureEditor
+     (editorProps.attributes.class), which Tiptap applies to its
+     .ProseMirror contenteditable. We keep all editor typography under
+     .editor-host .tiptap so the rules don't leak elsewhere. */
+  .editor-host {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
   }
 
-  .pap-todo-widget {
+  .editor-host .tiptap {
+    flex: 1 1 auto;
+    min-height: 100%;
+    padding: 8px 24px 24px;
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    caret-color: var(--color-caret);
+    outline: none;
+  }
+
+  .editor-host .tiptap > * + * {
+    margin-top: 0.4em;
+  }
+
+  /* Headings */
+  .editor-host .tiptap h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.012em;
+    line-height: 1.25;
+    margin: 0.4em 0 0.1em;
+  }
+  .editor-host .tiptap h2 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.006em;
+    line-height: 1.3;
+    margin: 0.4em 0 0.1em;
+  }
+  .editor-host .tiptap h3 {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin: 0.4em 0 0.1em;
+  }
+
+  /* Paragraph */
+  .editor-host .tiptap p {
+    margin: 0;
+  }
+
+  /* Inline */
+  .editor-host .tiptap strong {
+    font-weight: 600;
+  }
+  .editor-host .tiptap em {
+    font-style: italic;
+  }
+  .editor-host .tiptap s,
+  .editor-host .tiptap del {
+    text-decoration: line-through;
+    text-decoration-color: var(--color-text-faint);
+    color: var(--color-text-muted);
+  }
+  .editor-host .tiptap u {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--color-text-muted);
+  }
+  .editor-host .tiptap a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--color-accent);
+    cursor: pointer;
+  }
+  .editor-host .tiptap mark {
+    background: #eceefe;
+    color: inherit;
+    padding: 1px 3px;
+    border-radius: 3px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .editor-host .tiptap code {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: oklch(0 0 0 / 0.05);
+    border: 1px solid var(--color-border);
+  }
+
+  /* Lists — explicit list-style required because Tailwind v4 Preflight
+     resets `list-style: none` on all ul/ol globally. */
+  .editor-host .tiptap ul,
+  .editor-host .tiptap ol {
+    padding-left: 1.4em;
+    margin: 0;
+  }
+  .editor-host .tiptap ul {
+    list-style: disc;
+  }
+  .editor-host .tiptap ol {
+    list-style: decimal;
+  }
+  .editor-host .tiptap li {
+    margin: 0;
+  }
+  .editor-host .tiptap li > p {
+    margin: 0;
+  }
+  .editor-host .tiptap ul li::marker {
+    color: var(--color-text-muted);
+  }
+  .editor-host .tiptap ol li::marker {
+    color: var(--color-accent);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Task list — Tiptap renders <ul data-type="taskList"> with <li data-type="taskItem"> > <label><input/></label> + <div> */
+  .editor-host .tiptap ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] li > label {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    margin-right: 4px;
-    vertical-align: -3px;
-    color: var(--color-accent);
+    flex: 0 0 auto;
+    margin-top: 5px;
+    user-select: none;
   }
-
-  .pap-todo-widget svg {
+  .editor-host .tiptap ul[data-type="taskList"] li > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
     width: 14px;
     height: 14px;
+    border-radius: 4px;
+    border: 1.5px solid var(--color-accent);
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    margin: 0;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] input[type="checkbox"]:checked {
+    background: var(--color-accent);
+  }
+  .editor-host .tiptap ul[data-type="taskList"] input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 8.4l2.6 2.6L12 5.6'/></svg>");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--color-text-faint);
+  }
+
+  /* Blockquote */
+  .editor-host .tiptap blockquote {
+    border-left: 3px solid var(--color-border-strong);
+    padding-left: 10px;
+    margin: 0;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  /* Fenced code block */
+  .editor-host .tiptap pre {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: oklch(0 0 0 / 0.04);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .editor-host .tiptap pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: inherit;
+    border-radius: 0;
+  }
+
+  /* Horizontal rule */
+  .editor-host .tiptap hr {
+    border: 0;
+    border-top: 1px solid var(--color-border-strong);
+    margin: 12px 0;
+  }
+
+  /* Placeholder (empty doc) — Tiptap Placeholder ext adds .is-editor-empty
+     and a data-placeholder attr to the first empty node. */
+  .editor-host .tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-faint);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
+  /* Selection inside the editor */
+  .editor-host .tiptap ::selection {
+    background: var(--color-selection);
   }
 }
