@@ -14,3 +14,14 @@ pub fn hide_capture(app: AppHandle) -> Result<(), String> {
 pub fn capture_ready() -> Result<(), String> {
     Ok(())
 }
+
+/// Begin an interactive edge/corner resize of the capture window. tao's
+/// `startResizeDragging` is a no-op on macOS, so the grab handles call this
+/// instead — it runs a native AppKit drag loop until mouse-up.
+#[tauri::command]
+pub fn start_resize(app: AppHandle, direction: String) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("capture") {
+        crate::window_style::start_resize(&window, &direction).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

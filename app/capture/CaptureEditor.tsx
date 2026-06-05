@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { EditorContent } from "@tiptap/react";
 import { AnimatePresence, motion } from "motion/react";
 
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { useCaptureEditor } from "../lib/editor/tiptap";
@@ -34,11 +35,11 @@ function startResize(dir: ResizeDir) {
   return (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    console.log("[resize] start", dir);
-    getCurrentWindow()
-      .startResizeDragging(dir)
-      .then(() => console.log("[resize] resolved", dir))
-      .catch((err) => console.error("[resize] rejected", dir, err));
+    // tao's `startResizeDragging` is a no-op on macOS, so resizing goes through
+    // a native AppKit drag loop in the Rust `start_resize` command instead.
+    invoke("start_resize", { direction: dir }).catch((err) =>
+      console.error("[resize] failed", dir, err),
+    );
   };
 }
 import {

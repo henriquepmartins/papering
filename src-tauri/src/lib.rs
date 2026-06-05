@@ -24,6 +24,7 @@ pub fn run() {
             notes::delete_note,
             capture::hide_capture,
             capture::capture_ready,
+            capture::start_resize,
         ])
         .setup(|app| {
             // 0. macOS: run as an accessory app — no Dock icon, no Cmd-Tab entry.
