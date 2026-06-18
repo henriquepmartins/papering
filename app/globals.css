@@ -49,16 +49,23 @@
     background: var(--color-selection);
   }
 
+  /* Chrome icons are all inline SVGs — stop them being dragged out as a ghost
+     image (a web tell). Editor content uses <img>, which stays draggable. */
+  svg {
+    -webkit-user-drag: none;
+  }
+
   .editor-host,
   .editor-host * {
     cursor: text;
   }
 
-  /* Task-list checkboxes are interactive — restore pointer cursor that the
-     blanket `cursor: text` above would otherwise override. */
+  /* Task-list checkboxes are interactive — show the native arrow cursor rather
+     than inheriting the blanket `cursor: text` above. (No `pointer`: a hand
+     cursor on controls is a web tell.) */
   .editor-host input[type="checkbox"],
   .editor-host ul[data-type="taskList"] > li > label {
-    cursor: pointer;
+    cursor: default;
   }
 
   /* Outer frame: invisible padding around the visible card so tooltips can
@@ -69,6 +76,8 @@
     height: 100vh;
     padding: 50px 20px 10px;
     position: relative;
+    /* No rubber-band/overscroll glow — a web-scroll tell. */
+    overscroll-behavior: none;
   }
 
   /* Invisible resize handles tracing the OS window edges. macOS hides them
@@ -165,35 +174,17 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    /* Vibrancy: NSVisualEffectView (Sidebar / State::Active) sits behind the
-       webview from `src-tauri/src/vibrancy.rs`; the CSS layer adds the warm
-       tint + soft blur on top. `backdrop-filter` weakens on unfocused windows
-       in WebKit — the pinned native vibrancy below absorbs most of that
-       drop so the panel keeps its look. */
-    background:
-      linear-gradient(
-        180deg,
-        rgba(240, 240, 240, 0.86) 0%,
-        rgba(240, 240, 240, 0.8) 100%
-      );
-    backdrop-filter: blur(48px) saturate(1.9);
-    -webkit-backdrop-filter: blur(48px) saturate(1.9);
+    /* Vibrancy: the real blur comes from the always-active NSVisualEffectView
+       (Sidebar / State::Active) pinned behind the webview in
+       `src-tauri/src/vibrancy.rs`. We intentionally do NOT use CSS
+       `backdrop-filter` here — WebKit fades it toward zero on unfocused
+       windows, which made the panel lose its frosted look. The native layer is
+       focus-independent, so we only add a single constant warm tint on top; the
+       look never changes with focus. */
+    background: rgba(240, 240, 240, 0.7);
     box-shadow:
       inset 0 0 0 1px rgba(0, 0, 0, 0.06),
       inset 0 1px 0 rgba(255, 255, 255, 0.55);
-    transition: background 160ms ease;
-  }
-
-  /* When the window loses focus WebKit fades `backdrop-filter` toward zero, so
-     the panel would show the desktop through it. Raise the solid fill to keep
-     the panel opaque/frosted-looking even with the blur gone. */
-  :root[data-win-focused="false"] .capture-shell {
-    background:
-      linear-gradient(
-        180deg,
-        rgba(242, 242, 242, 0.97) 0%,
-        rgba(242, 242, 242, 0.95) 100%
-      );
   }
 
   .capture-shell > .editor-host {
@@ -248,7 +239,6 @@
      and color (the latter is too tiny a change to merit a JS-driven transition). */
   .capture-titlebar__icons button {
     all: unset;
-    cursor: pointer;
     width: 26px;
     height: 24px;
     display: inline-flex;
@@ -309,7 +299,6 @@
     all: unset;
     grid-column: 3;
     justify-self: end;
-    cursor: pointer;
     font-family: "Times New Roman", Georgia, serif;
     font-style: italic;
     font-size: 14px;
@@ -415,7 +404,6 @@
   }
 
   .pap-popover__row--button {
-    cursor: pointer;
     background: transparent;
     border: 0;
     width: 100%;
@@ -450,7 +438,6 @@
     padding: 6px 8px;
     background: transparent;
     border: 0;
-    cursor: pointer;
     color: inherit;
     font: inherit;
     text-align: left;
@@ -464,7 +451,6 @@
 
   .pap-popover__delete {
     all: unset;
-    cursor: pointer;
     width: 28px;
     display: inline-flex;
     align-items: center;
@@ -531,6 +517,7 @@
     flex-direction: column;
     min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: none;
   }
 
   .editor-host .tiptap {
@@ -576,6 +563,19 @@
     margin: 0;
   }
 
+  /* Pasted images */
+  .editor-host .tiptap img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 0.5em 0;
+  }
+  .editor-host .tiptap img.ProseMirror-selectednode {
+    outline: 2px solid var(--color-caret);
+    outline-offset: 1px;
+  }
+
   /* Inline */
   .editor-host .tiptap strong {
     font-weight: 600;
@@ -601,7 +601,6 @@
     text-underline-offset: 3px;
     text-decoration-thickness: 1px;
     text-decoration-color: var(--color-accent);
-    cursor: pointer;
   }
   .editor-host .tiptap mark {
     background: #eceefe;
@@ -677,7 +676,6 @@
     border-radius: 4px;
     border: 1.5px solid var(--color-accent);
     background: transparent;
-    cursor: pointer;
     position: relative;
     margin: 0;
     transition: background 120ms ease, border-color 120ms ease;

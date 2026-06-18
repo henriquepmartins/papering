@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type SaveNoteResult = { path: string; created: boolean };
 export type NoteMeta = { path: string; title: string; updated_at: number };
+export type SaveImageResult = { relative: string; absolute: string };
 
 export function isTauri(): boolean {
   return (
@@ -30,6 +31,18 @@ export function loadNote(path: string): Promise<string> {
 export function deleteNote(path: string): Promise<void> {
   if (!isTauri()) return Promise.resolve();
   return invoke<void>("delete_note", { path });
+}
+
+export function saveImage(bytes: Uint8Array, ext: string): Promise<SaveImageResult> {
+  if (!isTauri()) {
+    return Promise.resolve({ relative: "", absolute: "" });
+  }
+  return invoke<SaveImageResult>("save_image", { bytes: Array.from(bytes), ext });
+}
+
+export function attachmentsBase(): Promise<string> {
+  if (!isTauri()) return Promise.resolve("");
+  return invoke<string>("attachments_base");
 }
 
 export function hideCapture(): Promise<void> {

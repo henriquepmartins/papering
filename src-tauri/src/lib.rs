@@ -2,9 +2,10 @@ mod commands;
 mod db;
 mod fs;
 mod hotkey;
+mod vibrancy;
 mod window_style;
 
-use commands::{capture, notes};
+use commands::{capture, images, notes};
 use tauri::Manager;
 use tauri_plugin_autostart::{MacosLauncher, ManagerExt};
 
@@ -22,6 +23,8 @@ pub fn run() {
             notes::list_notes,
             notes::load_note,
             notes::delete_note,
+            images::save_image,
+            images::attachments_base,
             capture::hide_capture,
             capture::capture_ready,
             capture::start_resize,
@@ -41,10 +44,11 @@ pub fn run() {
                 eprintln!("[papering] sqlite init failed: {err:#}");
             }
 
-            // 3. Surface the capture window. Vibrancy is handled by CSS
-            // backdrop-filter on `.capture-shell` so the surrounding
-            // transparent padding (where tooltips render) stays clean —
-            // an NSVisualEffectView on the contentView would bleed into it.
+            // 3. Surface the capture window. Vibrancy is a real, always-active
+            // NSVisualEffectView inset to the card (see `vibrancy.rs`), so the
+            // frosted glass never fades on focus loss the way CSS
+            // `backdrop-filter` does. The inset keeps the transparent padding
+            // (where tooltips render over the desktop) clear.
             if let Some(capture_window) = app.get_webview_window("capture") {
                 // Restore the resizable/miniaturizable/closable style mask on
                 // macOS. With `decorations: false`, Tauri creates the NSWindow
@@ -52,6 +56,11 @@ pub fn run() {
                 // and makes `startResizeDragging` / `startDragging` no-op even
                 // though the JS calls succeed.
                 window_style::apply_mac_style_mask(&capture_window)?;
+
+                // Pin the native frosted-glass layer behind the card.
+                if let Err(err) = vibrancy::apply_card_vibrancy(&capture_window) {
+                    eprintln!("[papering] vibrancy failed: {err}");
+                }
 
                 // Centre on the active screen at startup.
                 let _ = capture_window.center();

@@ -99,9 +99,33 @@ pub fn delete_note(path: String) -> Result<(), String> {
     std::fs::remove_file(&canonical).map_err(|e| e.to_string())
 }
 
+/// Remove inline image markdown (`![alt](src)`) so a note that opens with a
+/// pasted image still derives a sensible title from the following text.
+fn strip_image_markdown(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(start) = rest.find("![") {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 2..];
+        // Expect `]( … )` to close the image; otherwise keep the text as-is.
+        if let Some(close_alt) = after.find("](") {
+            let after_paren = &after[close_alt + 2..];
+            if let Some(close_paren) = after_paren.find(')') {
+                rest = &after_paren[close_paren + 1..];
+                continue;
+            }
+        }
+        out.push_str("![");
+        rest = after;
+    }
+    out.push_str(rest);
+    out
+}
+
 fn derive_title(content: &str) -> String {
     for raw in content.lines() {
-        let line = raw.trim();
+        let line = strip_image_markdown(raw.trim());
+        let line = line.trim();
         if line.is_empty() {
             continue;
         }

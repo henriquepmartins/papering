@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { EditorContent } from "@tiptap/react";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { useCaptureEditor } from "../lib/editor/tiptap";
+import { setAttachmentsBase } from "../lib/editor/extensions";
 
 type ResizeDir =
   | "North"
@@ -43,6 +44,7 @@ function startResize(dir: ResizeDir) {
   };
 }
 import {
+  attachmentsBase,
   captureReady,
   deleteNote,
   hideCapture,
@@ -54,6 +56,11 @@ import {
 
 const SAVE_DEBOUNCE_MS = 400;
 const TOOLTIP_DELAY_MS = 350;
+// After a tooltip closes, hovering another icon within this window opens its
+// tooltip instantly (no delay, no enter animation) — so moving across the
+// toolbar feels immediate, while the first tooltip still waits the full delay.
+const TOOLTIP_SKIP_WINDOW_MS = 300;
+let lastTooltipCloseAt = 0;
 
 const HOVER_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
 const HOVER_BG = "rgba(0, 0, 0, 0.06)";
@@ -61,6 +68,7 @@ const TRANSPARENT = "rgba(0, 0, 0, 0)";
 
 function stripMarkdownInline(line: string): string {
   return line
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
     .replace(/^#{1,6}\s+/, "")
     .replace(/^[-*+]\s+(\[[ xX]\]\s+)?/, "")
     .replace(/^\d+\.\s+/, "")
@@ -105,6 +113,11 @@ export default function CaptureEditor() {
   const [charCount, setCharCount] = useState(0);
   const [title, setTitle] = useState("New note");
   const [popover, setPopover] = useState<Popover>(null);
+  // Whether the open popover should appear instantly (no enter animation).
+  // True when opened via keyboard (⌘K/⌘O) — frequent keyboard actions should
+  // never animate (Raycast's launcher has no open animation) — or under
+  // Reduce Motion. Mouse-opened popovers keep the subtle scale/slide.
+  const [popoverInstant, setPopoverInstant] = useState(false);
   const [notes, setNotes] = useState<NoteMeta[]>([]);
 
   const flushSave = useCallback(async () => {
@@ -142,6 +155,11 @@ export default function CaptureEditor() {
     if (!editor) return;
     editor.commands.focus();
     captureReady().catch(() => {});
+    // Cache the attachments base dir so pasted/loaded images resolve to an
+    // `asset:` URL before any note with images is opened.
+    attachmentsBase()
+      .then((dir) => dir && setAttachmentsBase(dir))
+      .catch(() => {});
   }, [editor]);
 
   // Flush on window blur and on unmount.
@@ -178,13 +196,14 @@ export default function CaptureEditor() {
   }, [popover]);
 
   const openShortcuts = () => {
+    setPopoverInstant(false);
     setPopover((p: Popover) => (p === "shortcuts" ? null : "shortcuts"));
   };
 
   // Always-fresh refs for the action handlers — the keybinding effect runs
   // once (no deps) so it captures these via the ref, not stale closures.
   const actionsRef = useRef({
-    openNotes: () => {},
+    openNotes: (_instant?: boolean) => {},
     handleNew: () => {},
     handleOpenLastOrNew: () => {},
     focusEditor: () => {},
@@ -200,11 +219,12 @@ export default function CaptureEditor() {
     }
   }, []);
 
-  const openNotes = async () => {
+  const openNotes = async (instant = false) => {
     if (popover === "notes") {
       setPopover(null);
       return;
     }
+    setPopoverInstant(instant);
     await refreshNotes();
     setPopover("notes");
   };
@@ -275,20 +295,18 @@ export default function CaptureEditor() {
     };
   }, []);
 
-  // WebKit weakens `backdrop-filter` on unfocused windows (no CSS opt-out), so
-  // the panel turns too transparent when it loses focus. Flag focus state on the
-  // root element so CSS can raise the shell's background opacity to compensate,
-  // keeping the frosted look roughly constant like Raycast.
+  // Suppress the default WebKit right-click menu (Reload / Inspect Element /
+  // back-forward) everywhere except inside the editor, where the native edit
+  // menu (copy, paste, spellcheck, Look Up) is wanted. A browser context menu
+  // is an instant "this is a website" tell.
   useEffect(() => {
-    const root = document.documentElement;
-    root.dataset.winFocused = "true";
-    const win = getCurrentWindow();
-    const unlistenPromise = win.onFocusChanged(({ payload: focused }) => {
-      root.dataset.winFocused = focused ? "true" : "false";
-    });
-    return () => {
-      unlistenPromise.then((u) => u()).catch(() => {});
+    const onContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(".editor-host")) return;
+      e.preventDefault();
     };
+    document.addEventListener("contextmenu", onContextMenu);
+    return () => document.removeEventListener("contextmenu", onContextMenu);
   }, []);
 
   // Global shortcuts: ⌘K (shortcuts panel), ⌘O (notes list), ⌘N (new note).
@@ -299,6 +317,7 @@ export default function CaptureEditor() {
       if (key === "k") {
         e.preventDefault();
         e.stopPropagation();
+        setPopoverInstant(true); // keyboard-triggered → no enter animation
         setPopover((p) => {
           const next = p === "shortcuts" ? null : "shortcuts";
           if (next === null) actionsRef.current.focusEditor();
@@ -307,7 +326,7 @@ export default function CaptureEditor() {
       } else if (key === "o") {
         e.preventDefault();
         e.stopPropagation();
-        void actionsRef.current.openNotes();
+        void actionsRef.current.openNotes(true); // keyboard → instant
       } else if (key === "n") {
         e.preventDefault();
         e.stopPropagation();
@@ -362,13 +381,16 @@ export default function CaptureEditor() {
             </IconButton>
           </div>
           <AnimatePresence>
-            {popover === "shortcuts" && <ShortcutsPopover key="shortcuts" />}
+            {popover === "shortcuts" && (
+              <ShortcutsPopover key="shortcuts" instant={popoverInstant} />
+            )}
             {popover === "notes" && (
               <NotesPopover
                 key="notes"
                 notes={notes}
                 onPick={handleOpenNote}
                 onDelete={handleDeleteNote}
+                instant={popoverInstant}
               />
             )}
           </AnimatePresence>
@@ -399,8 +421,12 @@ function IconButton({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
   const [tipAnchor, setTipAnchor] = useState<{ top: number; left: number } | null>(null);
+  // Whether this tooltip should appear instantly (a subsequent hover within the
+  // skip window) — no enter animation.
+  const [tipInstant, setTipInstant] = useState(false);
   const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mounted, setMounted] = useState(false);
+  const reduce = !!useReducedMotion();
 
   useEffect(() => setMounted(true), []);
 
@@ -427,13 +453,21 @@ function IconButton({
 
   const onHoverStart = () => {
     if (tipTimer.current) clearTimeout(tipTimer.current);
-    tipTimer.current = setTimeout(() => {
+    const skip = Date.now() - lastTooltipCloseAt < TOOLTIP_SKIP_WINDOW_MS;
+    const show = () => {
       const anchor = computeAnchor();
-      if (anchor) setTipAnchor(anchor);
-    }, TOOLTIP_DELAY_MS);
+      if (anchor) {
+        setTipInstant(skip);
+        setTipAnchor(anchor);
+      }
+    };
+    if (skip) show();
+    else tipTimer.current = setTimeout(show, TOOLTIP_DELAY_MS);
   };
   const onHoverEnd = () => {
     if (tipTimer.current) clearTimeout(tipTimer.current);
+    // Only open the skip window if a tooltip was actually visible.
+    if (tipAnchor) lastTooltipCloseAt = Date.now();
     setTipAnchor(null);
   };
 
@@ -452,7 +486,7 @@ function IconButton({
         className="capture-titlebar__icon"
         initial={{ backgroundColor: TRANSPARENT }}
         whileHover={{ backgroundColor: HOVER_BG }}
-        whileTap={{ scale: 0.94 }}
+        whileTap={reduce ? undefined : { scale: 0.94 }}
         transition={{ duration: 0.08, ease: HOVER_EASE }}
       >
         {children}
@@ -468,10 +502,18 @@ function IconButton({
               >
                 <motion.div
                   className="pap-tooltip"
-                  initial={{ opacity: 0, y: 4, scale: 0.97 }}
+                  initial={
+                    tipInstant
+                      ? false
+                      : { opacity: 0, ...(reduce ? {} : { y: 4, scale: 0.97 }) }
+                  }
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 4, scale: 0.97, transition: { duration: 0.1 } }}
-                  transition={{ duration: 0.15, ease: HOVER_EASE }}
+                  exit={{
+                    opacity: 0,
+                    ...(reduce ? {} : { y: 4, scale: 0.97 }),
+                    transition: { duration: tipInstant ? 0 : 0.1 },
+                  }}
+                  transition={{ duration: tipInstant ? 0 : 0.15, ease: HOVER_EASE }}
                   style={{ transformOrigin: "bottom center" }}
                 >
                   <span>{label}</span>
@@ -491,6 +533,22 @@ function IconButton({
   );
 }
 
+// Motion props for the title-bar popovers. `instant` (keyboard-triggered) skips
+// the enter animation entirely; Reduce Motion keeps the opacity fade but drops
+// the position/scale movement. Origin is the top-right trigger icons, so it
+// scales out from the button rather than from its own center.
+function usePopoverMotion(instant: boolean) {
+  const reduce = !!useReducedMotion();
+  const offset = reduce ? {} : { y: -4, scale: 0.97 };
+  return {
+    initial: instant ? false : { opacity: 0, ...offset },
+    animate: { opacity: 1, y: 0, scale: 1 },
+    exit: { opacity: 0, ...offset, transition: { duration: instant ? 0.08 : 0.1 } },
+    transition: { duration: instant ? 0 : 0.16, ease: HOVER_EASE },
+    style: { transformOrigin: "top right" as const },
+  };
+}
+
 const SHORTCUT_ROWS: Array<[string, string]> = [
   ["Capture", "⌃⌥N"],
   ["Save & close", "Esc"],
@@ -501,8 +559,9 @@ const SHORTCUT_ROWS: Array<[string, string]> = [
   ["New note", "＋"],
 ];
 
-function ShortcutsPopover() {
+function ShortcutsPopover({ instant }: { instant: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const motionProps = usePopoverMotion(instant);
 
   useEffect(() => {
     const first = containerRef.current?.querySelector<HTMLElement>(
@@ -534,10 +593,7 @@ function ShortcutsPopover() {
       className="pap-popover"
       role="menu"
       onKeyDown={onKeyDown}
-      initial={{ opacity: 0, y: -4, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -4, scale: 0.97, transition: { duration: 0.1 } }}
-      transition={{ duration: 0.16, ease: HOVER_EASE }}
+      {...motionProps}
     >
       {SHORTCUT_ROWS.map(([label, keys]) => (
         <div
@@ -558,12 +614,15 @@ function NotesPopover({
   notes,
   onPick,
   onDelete,
+  instant,
 }: {
   notes: NoteMeta[];
   onPick: (path: string) => void;
   onDelete: (path: string) => void;
+  instant: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const motionProps = usePopoverMotion(instant);
 
   useEffect(() => {
     const first = containerRef.current?.querySelector<HTMLElement>(
@@ -612,10 +671,7 @@ function NotesPopover({
       className="pap-popover"
       role="menu"
       onKeyDown={onKeyDown}
-      initial={{ opacity: 0, y: -4, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: -4, scale: 0.97, transition: { duration: 0.1 } }}
-      transition={{ duration: 0.16, ease: HOVER_EASE }}
+      {...motionProps}
     >
       {notes.length === 0 ? (
         <div className="pap-popover__empty">No notes yet</div>
@@ -662,7 +718,7 @@ function NoteRow({
             setTimeout(() => setConfirm(false), 2500);
           }
         }}
-        whileTap={{ scale: 0.9 }}
+        whileTap={{ scale: 0.93 }}
         transition={{ duration: 0.12, ease: HOVER_EASE }}
       >
         <TrashIcon />
