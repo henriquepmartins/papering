@@ -1,7 +1,7 @@
 {
   "name": "papering",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "next dev",
@@ -15,6 +15,8 @@
   "dependencies": {
     "@tauri-apps/api": "^2.2.0",
     "@tauri-apps/plugin-global-shortcut": "^2.2.0",
+    "@tauri-apps/plugin-process": "^2.2.0",
+    "@tauri-apps/plugin-updater": "^2.2.0",
     "@tiptap/extension-heading": "^3.23.6",
     "@tiptap/extension-highlight": "^3.23.6",
     "@tiptap/extension-image": "^3.23.6",

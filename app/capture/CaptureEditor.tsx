@@ -10,6 +10,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { useCaptureEditor } from "../lib/editor/tiptap";
 import { setAttachmentsBase } from "../lib/editor/extensions";
+import { checkForUpdates } from "../lib/updater";
 
 type ResizeDir =
   | "North"
@@ -149,6 +150,11 @@ export default function CaptureEditor() {
       });
     },
   });
+
+  // Check for app updates once on startup (no-op outside Tauri).
+  useEffect(() => {
+    void checkForUpdates();
+  }, []);
 
   // Focus + announce ready as soon as the editor instance is available.
   useEffect(() => {
