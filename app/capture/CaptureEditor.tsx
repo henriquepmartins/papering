@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { EditorContent } from "@tiptap/react";
+import { EditorContent, useEditorState, type Editor } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { invoke } from "@tauri-apps/api/core";
@@ -11,6 +12,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCaptureEditor } from "../lib/editor/tiptap";
 import { setAttachmentsBase } from "../lib/editor/extensions";
 import { checkForUpdates } from "../lib/updater";
+import { useLocale, useT, type MessageKey } from "../lib/i18n";
+import { LOCALES } from "../lib/i18n/messages";
+import { clearFormatting, toggleLink } from "../lib/editor/commands";
+import { useTooltip } from "./useTooltip";
+import { usePopoverKeyboard } from "./usePopoverKeyboard";
+import ContextMenu, { type ContextAnchor } from "./ContextMenu";
+import WelcomeCard from "./WelcomeCard";
 
 type ResizeDir =
   | "North"
@@ -56,12 +64,6 @@ import {
 } from "../lib/ipc";
 
 const SAVE_DEBOUNCE_MS = 400;
-const TOOLTIP_DELAY_MS = 350;
-// After a tooltip closes, hovering another icon within this window opens its
-// tooltip instantly (no delay, no enter animation) — so moving across the
-// toolbar feels immediate, while the first tooltip still waits the full delay.
-const TOOLTIP_SKIP_WINDOW_MS = 300;
-let lastTooltipCloseAt = 0;
 
 const HOVER_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
 const HOVER_BG = "rgba(0, 0, 0, 0.06)";
@@ -82,14 +84,14 @@ function stripMarkdownInline(line: string): string {
     .trim();
 }
 
-function deriveTitle(doc: string): string {
+function deriveTitle(doc: string, fallback: string): string {
   for (const raw of doc.split("\n")) {
     const line = raw.trim();
     if (!line) continue;
     const cleaned = stripMarkdownInline(line);
     if (cleaned) return cleaned.slice(0, 80);
   }
-  return "New note";
+  return fallback;
 }
 
 function formatRelative(unixSeconds: number): string {
@@ -103,17 +105,23 @@ function formatRelative(unixSeconds: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-type Popover = null | "shortcuts" | "notes";
+type Popover = null | "shortcuts" | "notes" | "settings";
 
 export default function CaptureEditor() {
+  const t = useT();
+  const { locale } = useLocale();
+
   const docRef = useRef<string>("");
   const dirtyRef = useRef<boolean>(false);
   const currentPathRef = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [charCount, setCharCount] = useState(0);
-  const [title, setTitle] = useState("New note");
+  const [title, setTitle] = useState(() => t("note.new"));
   const [popover, setPopover] = useState<Popover>(null);
+  const [ctxMenu, setCtxMenu] = useState<ContextAnchor | null>(null);
+  const [formatOpen, setFormatOpen] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
   // Whether the open popover should appear instantly (no enter animation).
   // True when opened via keyboard (⌘K/⌘O) — frequent keyboard actions should
   // never animate (Raycast's launcher has no open animation) — or under
@@ -139,7 +147,7 @@ export default function CaptureEditor() {
       docRef.current = doc;
       dirtyRef.current = true;
       setCharCount(doc.length);
-      setTitle(deriveTitle(doc));
+      setTitle(deriveTitle(doc, t("note.new")));
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => void flushSave(), SAVE_DEBOUNCE_MS);
     },
@@ -206,6 +214,11 @@ export default function CaptureEditor() {
     setPopover((p: Popover) => (p === "shortcuts" ? null : "shortcuts"));
   };
 
+  const openSettings = () => {
+    setPopoverInstant(false);
+    setPopover((p: Popover) => (p === "settings" ? null : "settings"));
+  };
+
   // Always-fresh refs for the action handlers — the keybinding effect runs
   // once (no deps) so it captures these via the ref, not stale closures.
   const actionsRef = useRef({
@@ -213,6 +226,8 @@ export default function CaptureEditor() {
     handleNew: () => {},
     handleOpenLastOrNew: () => {},
     focusEditor: () => {},
+    openSettings: () => {},
+    openShortcuts: () => {},
   });
 
   const refreshNotes = useCallback(async () => {
@@ -244,7 +259,7 @@ export default function CaptureEditor() {
     dirtyRef.current = false;
     currentPathRef.current = null;
     setCharCount(0);
-    setTitle("New note");
+    setTitle(t("note.new"));
     setPopover(null);
     editor.commands.focus();
   };
@@ -263,7 +278,7 @@ export default function CaptureEditor() {
       dirtyRef.current = false;
       currentPathRef.current = path;
       setCharCount(content.length);
-      setTitle(deriveTitle(content));
+      setTitle(deriveTitle(content, t("note.new")));
       setPopover(null);
       editor.commands.focus();
     } catch (err) {
@@ -289,6 +304,8 @@ export default function CaptureEditor() {
   actionsRef.current.handleNew = handleNew;
   actionsRef.current.handleOpenLastOrNew = handleOpenLastOrNew;
   actionsRef.current.focusEditor = () => editor?.commands.focus();
+  actionsRef.current.openSettings = openSettings;
+  actionsRef.current.openShortcuts = openShortcuts;
 
   // Backend → frontend: global hotkey (⌃⌥N) — resume most recent note or start fresh.
   useEffect(() => {
@@ -301,19 +318,50 @@ export default function CaptureEditor() {
     };
   }, []);
 
-  // Suppress the default WebKit right-click menu (Reload / Inspect Element /
-  // back-forward) everywhere except inside the editor, where the native edit
-  // menu (copy, paste, spellcheck, Look Up) is wanted. A browser context menu
-  // is an instant "this is a website" tell.
+  // Right-click opens our own command menu everywhere (never the WebKit menu,
+  // which is an instant "this is a website" tell). The menu is context-aware:
+  // formatting/clipboard actions when text is selected, insert + app commands
+  // otherwise. Resize bands keep the native cursor but no menu.
   useEffect(() => {
     const onContextMenu = (e: MouseEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest(".editor-host")) return;
       e.preventDefault();
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(".capture-resize")) return;
+      setPopover(null);
+      setFormatOpen(false);
+      setCtxMenu({ x: e.clientX, y: e.clientY });
     };
     document.addEventListener("contextmenu", onContextMenu);
     return () => document.removeEventListener("contextmenu", onContextMenu);
   }, []);
+
+  // Re-render the editor's placeholder decoration and the default title when the
+  // language changes (the placeholder reads the locale lazily; an empty
+  // transaction forces ProseMirror to recompute the decoration).
+  useEffect(() => {
+    if (!editor) return;
+    editor.view.dispatch(editor.state.tr);
+    if (!docRef.current.trim()) setTitle(t("note.new"));
+  }, [locale, editor, t]);
+
+  // First-run welcome card (once per install).
+  useEffect(() => {
+    try {
+      if (!window.localStorage.getItem("pap.onboarded")) setShowWelcome(true);
+    } catch {
+      // Storage unavailable — skip onboarding rather than block the app.
+    }
+  }, []);
+
+  const dismissWelcome = useCallback(() => {
+    setShowWelcome(false);
+    try {
+      window.localStorage.setItem("pap.onboarded", "1");
+    } catch {
+      // Ignore — the card simply won't be suppressed next launch.
+    }
+    editor?.commands.focus();
+  }, [editor]);
 
   // Global shortcuts: ⌘K (shortcuts panel), ⌘O (notes list), ⌘N (new note).
   useEffect(() => {
@@ -337,6 +385,16 @@ export default function CaptureEditor() {
         e.preventDefault();
         e.stopPropagation();
         void actionsRef.current.handleNew();
+      } else if (key === ",") {
+        // ⌘, → settings (standard macOS Preferences shortcut).
+        e.preventDefault();
+        e.stopPropagation();
+        setPopoverInstant(true);
+        setPopover((p) => {
+          const next = p === "settings" ? null : "settings";
+          if (next === null) actionsRef.current.focusEditor();
+          return next;
+        });
       }
     };
     document.addEventListener("keydown", onKey, true);
@@ -353,7 +411,7 @@ export default function CaptureEditor() {
         dirtyRef.current = false;
         currentPathRef.current = null;
         setCharCount(0);
-        setTitle("New note");
+        setTitle(t("note.new"));
       }
       await refreshNotes();
     } catch (err) {
@@ -376,14 +434,17 @@ export default function CaptureEditor() {
             {title}
           </div>
           <div className="capture-titlebar__icons">
-            <IconButton label="Shortcuts" shortcut="⌘K" onClick={openShortcuts}>
+            <IconButton label={t("btn.shortcuts")} shortcut="⌘K" onClick={openShortcuts}>
               <span className="cmd-glyph">⌘</span>
             </IconButton>
-            <IconButton label="Notes" shortcut="⌘O" onClick={openNotes}>
+            <IconButton label={t("btn.notes")} shortcut="⌘O" onClick={openNotes}>
               <NotesIcon />
             </IconButton>
-            <IconButton label="New note" shortcut="⌘N" onClick={handleNew}>
+            <IconButton label={t("btn.newNote")} shortcut="⌘N" onClick={handleNew}>
               <PlusIcon />
+            </IconButton>
+            <IconButton label={t("btn.settings")} shortcut="⌘," onClick={openSettings}>
+              <GearIcon />
             </IconButton>
           </div>
           <AnimatePresence>
@@ -399,16 +460,62 @@ export default function CaptureEditor() {
                 instant={popoverInstant}
               />
             )}
+            {popover === "settings" && (
+              <SettingsPopover key="settings" instant={popoverInstant} />
+            )}
           </AnimatePresence>
         </header>
         <EditorContent editor={editor} className="editor-host" />
-        <footer className="capture-hints" aria-hidden="true">
-          <span className="capture-hints__count">{charCount} characters</span>
-          <button type="button" className="capture-hints__format" title="Formatting">
-            T
-          </button>
+        {editor && (
+          <BubbleMenu
+            editor={editor}
+            className="pap-bubble"
+            options={{ placement: "top", offset: 8 }}
+          >
+            <FormatBar editor={editor} />
+          </BubbleMenu>
+        )}
+        <footer className="capture-hints">
+          <span className="capture-hints__count" aria-hidden="true">
+            {t("hints.characters", { n: charCount })}
+          </span>
+          <div className="capture-hints__format-wrap">
+            <button
+              type="button"
+              className="capture-hints__format"
+              title={t("btn.formatting")}
+              aria-label={t("btn.formatting")}
+              onClick={() => {
+                setPopover(null);
+                setCtxMenu(null);
+                setFormatOpen((v) => !v);
+                editor?.commands.focus();
+              }}
+            >
+              T
+            </button>
+            <AnimatePresence>
+              {formatOpen && editor && (
+                <FormatPopover editor={editor} onClose={() => setFormatOpen(false)} />
+              )}
+            </AnimatePresence>
+          </div>
         </footer>
       </div>
+      {ctxMenu && (
+        <ContextMenu
+          editor={editor}
+          anchor={ctxMenu}
+          onClose={() => setCtxMenu(null)}
+          onNewNote={() => void handleNew()}
+          onOpenNotes={() => void openNotes()}
+          onSettings={openSettings}
+          onShortcuts={openShortcuts}
+        />
+      )}
+      <AnimatePresence>
+        {showWelcome && <WelcomeCard onDismiss={dismissWelcome} />}
+      </AnimatePresence>
     </div>
   );
 }
@@ -426,15 +533,19 @@ function IconButton({
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const portalRef = useRef<HTMLDivElement>(null);
-  const [tipAnchor, setTipAnchor] = useState<{ top: number; left: number } | null>(null);
-  // Whether this tooltip should appear instantly (a subsequent hover within the
-  // skip window) — no enter animation.
-  const [tipInstant, setTipInstant] = useState(false);
-  const tipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [mounted, setMounted] = useState(false);
   const reduce = !!useReducedMotion();
-
-  useEffect(() => setMounted(true), []);
+  const {
+    anchor: tipAnchor,
+    setAnchor: setTipAnchor,
+    instant: tipInstant,
+    mounted,
+    start: onHoverStart,
+    end: onHoverEnd,
+  } = useTooltip(() => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return { top: rect.top - 6, left: rect.left + rect.width / 2 };
+  });
 
   // Clamp the tooltip into the viewport after first paint so right-edge icons
   // don't push it past the OS window bounds.
@@ -449,33 +560,7 @@ function IconButton({
       const clamped = Math.max(minLeft, Math.min(tipAnchor.left, maxLeft));
       setTipAnchor({ top: tipAnchor.top, left: clamped });
     }
-  }, [tipAnchor]);
-
-  const computeAnchor = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) return null;
-    return { top: rect.top - 6, left: rect.left + rect.width / 2 };
-  };
-
-  const onHoverStart = () => {
-    if (tipTimer.current) clearTimeout(tipTimer.current);
-    const skip = Date.now() - lastTooltipCloseAt < TOOLTIP_SKIP_WINDOW_MS;
-    const show = () => {
-      const anchor = computeAnchor();
-      if (anchor) {
-        setTipInstant(skip);
-        setTipAnchor(anchor);
-      }
-    };
-    if (skip) show();
-    else tipTimer.current = setTimeout(show, TOOLTIP_DELAY_MS);
-  };
-  const onHoverEnd = () => {
-    if (tipTimer.current) clearTimeout(tipTimer.current);
-    // Only open the skip window if a tooltip was actually visible.
-    if (tipAnchor) lastTooltipCloseAt = Date.now();
-    setTipAnchor(null);
-  };
+  }, [tipAnchor, setTipAnchor]);
 
   return (
     <div className="capture-titlebar__icon-wrap">
@@ -555,43 +640,23 @@ function usePopoverMotion(instant: boolean) {
   };
 }
 
-const SHORTCUT_ROWS: Array<[string, string]> = [
-  ["Capture", "⌃⌥N"],
-  ["Save & close", "Esc"],
-  ["Bold", "⌘B"],
-  ["Italic", "⌘I"],
-  ["Inline code", "⌘E"],
-  ["Strikethrough", "⌘⇧X"],
-  ["New note", "＋"],
+const SHORTCUT_ROWS: Array<[MessageKey, string]> = [
+  ["sc.capture", "⌃⌥N"],
+  ["sc.newNote", "⌘N"],
+  ["sc.openNotes", "⌘O"],
+  ["sc.settings", "⌘,"],
+  ["sc.saveClose", "Esc"],
+  ["sc.bold", "⌘B"],
+  ["sc.italic", "⌘I"],
+  ["sc.code", "⌘E"],
+  ["sc.strike", "⌘⇧X"],
 ];
 
 function ShortcutsPopover({ instant }: { instant: boolean }) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const motionProps = usePopoverMotion(instant);
-
-  useEffect(() => {
-    const first = containerRef.current?.querySelector<HTMLElement>(
-      ".pap-popover__row",
-    );
-    first?.focus();
-  }, []);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    e.preventDefault();
-    const items = Array.from(
-      containerRef.current?.querySelectorAll<HTMLElement>(".pap-popover__row") ??
-        [],
-    );
-    if (items.length === 0) return;
-    const active = document.activeElement as HTMLElement | null;
-    const idx = active ? items.indexOf(active) : -1;
-    const next =
-      e.key === "ArrowDown"
-        ? items[(idx + 1 + items.length) % items.length]
-        : items[(idx - 1 + items.length) % items.length];
-    next?.focus();
-  };
+  const onKeyDown = usePopoverKeyboard(containerRef, ".pap-popover__row");
 
   return (
     <motion.div
@@ -601,17 +666,246 @@ function ShortcutsPopover({ instant }: { instant: boolean }) {
       onKeyDown={onKeyDown}
       {...motionProps}
     >
-      {SHORTCUT_ROWS.map(([label, keys]) => (
+      {SHORTCUT_ROWS.map(([key, keys]) => (
         <div
           className="pap-popover__row"
           role="menuitem"
           tabIndex={0}
-          key={label}
+          key={key}
         >
-          <span className="pap-popover__label">{label}</span>
+          <span className="pap-popover__label">{t(key)}</span>
           <span className="pap-popover__meta">{keys}</span>
         </div>
       ))}
+    </motion.div>
+  );
+}
+
+// Settings popover — currently the language picker; room for more preferences.
+function SettingsPopover({ instant }: { instant: boolean }) {
+  const t = useT();
+  const { locale, setLocale } = useLocale();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const motionProps = usePopoverMotion(instant);
+  const onKeyDown = usePopoverKeyboard(containerRef, ".pap-popover__row--button");
+
+  return (
+    <motion.div
+      ref={containerRef}
+      className="pap-popover"
+      role="menu"
+      onKeyDown={onKeyDown}
+      {...motionProps}
+    >
+      <div className="pap-popover__section">{t("settings.language")}</div>
+      {LOCALES.map((loc) => (
+        <button
+          type="button"
+          key={loc}
+          role="menuitemradio"
+          aria-checked={locale === loc}
+          className="pap-popover__row pap-popover__row--button"
+          onClick={() => setLocale(loc)}
+        >
+          <span className="pap-popover__label">
+            {loc === "pt" ? t("settings.lang.pt") : t("settings.lang.en")}
+          </span>
+          <span className="pap-popover__check">{locale === loc ? "✓" : ""}</span>
+        </button>
+      ))}
+    </motion.div>
+  );
+}
+
+// Shared formatting controls used by both the selection bubble menu and the
+// footer "T" popover. Active states are read reactively via useEditorState so
+// the buttons highlight as the cursor moves.
+const FORMAT_BUTTONS: {
+  key: string;
+  glyph: React.ReactNode;
+  name: MessageKey;
+  mark: string;
+  run: (editor: Editor) => void;
+}[] = [
+  { key: "bold", glyph: "B", name: "ctx.bold", mark: "bold", run: (e) => e.chain().focus().toggleBold().run() },
+  { key: "italic", glyph: "I", name: "ctx.italic", mark: "italic", run: (e) => e.chain().focus().toggleItalic().run() },
+  { key: "strike", glyph: "S", name: "ctx.strike", mark: "strike", run: (e) => e.chain().focus().toggleStrike().run() },
+  { key: "code", glyph: "</>", name: "ctx.code", mark: "code", run: (e) => e.chain().focus().toggleCode().run() },
+  { key: "highlight", glyph: <MarkerIcon />, name: "ctx.highlight", mark: "highlight", run: (e) => e.chain().focus().toggleHighlight().run() },
+  { key: "h1", glyph: "H1", name: "slash.heading1", mark: "heading-1", run: (e) => e.chain().focus().toggleHeading({ level: 1 }).run() },
+  { key: "h2", glyph: "H2", name: "slash.heading2", mark: "heading-2", run: (e) => e.chain().focus().toggleHeading({ level: 2 }).run() },
+  { key: "h3", glyph: "H3", name: "slash.heading3", mark: "heading-3", run: (e) => e.chain().focus().toggleHeading({ level: 3 }).run() },
+  { key: "bullet", glyph: "•", name: "slash.bulletList", mark: "bulletList", run: (e) => e.chain().focus().toggleBulletList().run() },
+  { key: "task", glyph: "☑", name: "slash.taskList", mark: "taskList", run: (e) => e.chain().focus().toggleTaskList().run() },
+  { key: "link", glyph: <LinkIcon />, name: "ctx.link", mark: "link", run: (e) => toggleLink(e) },
+  { key: "clear", glyph: <EraserIcon />, name: "ctx.clearFormat", mark: "__clear", run: (e) => clearFormatting(e) },
+];
+
+function FormatBar({ editor }: { editor: Editor }) {
+  const t = useT();
+  const active = useEditorState({
+    editor,
+    selector: ({ editor: ed }) => ({
+      bold: ed.isActive("bold"),
+      italic: ed.isActive("italic"),
+      code: ed.isActive("code"),
+      strike: ed.isActive("strike"),
+      highlight: ed.isActive("highlight"),
+      "heading-1": ed.isActive("heading", { level: 1 }),
+      "heading-2": ed.isActive("heading", { level: 2 }),
+      "heading-3": ed.isActive("heading", { level: 3 }),
+      bulletList: ed.isActive("bulletList"),
+      taskList: ed.isActive("taskList"),
+      link: ed.isActive("link"),
+    }),
+  });
+
+  return (
+    <div className="pap-format">
+      {FORMAT_BUTTONS.map((b) => (
+        <FormatTipButton
+          key={b.key}
+          label={t(b.name)}
+          active={!!active[b.mark as keyof typeof active]}
+          italic={b.key === "italic"}
+          onRun={() => b.run(editor)}
+        >
+          {b.glyph}
+        </FormatTipButton>
+      ))}
+    </div>
+  );
+}
+
+// A format button that shows a hover tooltip naming what the glyph does (e.g.
+// "H2" → "Heading 2"), since the icons alone aren't obvious to everyone. Mirrors
+// the titlebar IconButton tooltip: portal to <body>, short delay, instant when
+// gliding across the bar, and flips below the button when there's no room above.
+function FormatTipButton({
+  label,
+  active,
+  italic,
+  onRun,
+  children,
+}: {
+  label: string;
+  active: boolean;
+  italic?: boolean;
+  onRun: () => void;
+  children: React.ReactNode;
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const reduce = !!useReducedMotion();
+  const {
+    anchor: tip,
+    instant,
+    mounted,
+    start,
+    end,
+  } = useTooltip(() => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const pad = 8;
+    const below = rect.top < 44; // not enough room above → drop below
+    const left = Math.max(
+      pad + 40,
+      Math.min(rect.left + rect.width / 2, window.innerWidth - pad - 40),
+    );
+    return { top: below ? rect.bottom + 6 : rect.top - 6, left, below };
+  });
+
+  const off = tip?.below ? -4 : 4;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        className={`pap-format__btn${active ? " is-active" : ""}${
+          italic ? " pap-format__btn--i" : ""
+        }`}
+        onMouseEnter={start}
+        onMouseLeave={end}
+        onMouseDown={(e) => {
+          e.preventDefault();
+          end();
+          onRun();
+        }}
+      >
+        {children}
+      </button>
+      {mounted &&
+        createPortal(
+          <AnimatePresence>
+            {tip && (
+              <div
+                className={`pap-tooltip-portal${tip.below ? " pap-tooltip-portal--below" : ""}`}
+                style={{ top: tip.top, left: tip.left }}
+              >
+                <motion.div
+                  className="pap-tooltip"
+                  initial={instant ? false : { opacity: 0, ...(reduce ? {} : { y: off, scale: 0.97 }) }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{
+                    opacity: 0,
+                    ...(reduce ? {} : { y: off, scale: 0.97 }),
+                    transition: { duration: instant ? 0 : 0.1 },
+                  }}
+                  transition={{ duration: instant ? 0 : 0.15, ease: HOVER_EASE }}
+                  style={{ transformOrigin: tip.below ? "top center" : "bottom center" }}
+                >
+                  {label}
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
+    </>
+  );
+}
+
+// Footer "T" popover — same formatting controls, anchored above the button.
+function FormatPopover({
+  editor,
+  onClose,
+}: {
+  editor: Editor;
+  onClose: () => void;
+}) {
+  const reduce = !!useReducedMotion();
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target?.closest(".pap-format-pop") || target?.closest(".capture-hints__format")) {
+        return;
+      }
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [onClose]);
+
+  return (
+    <motion.div
+      className="pap-format-pop"
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 4, scale: 0.97, transition: { duration: 0.1 } }}
+      transition={{ duration: 0.15, ease: HOVER_EASE }}
+      style={{ transformOrigin: "bottom right" }}
+    >
+      <FormatBar editor={editor} />
     </motion.div>
   );
 }
@@ -627,47 +921,22 @@ function NotesPopover({
   onDelete: (path: string) => void;
   instant: boolean;
 }) {
+  const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const motionProps = usePopoverMotion(instant);
-
-  useEffect(() => {
-    const first = containerRef.current?.querySelector<HTMLElement>(
-      ".pap-popover__pick",
-    );
-    first?.focus();
-  }, [notes.length]);
+  const onArrowKey = usePopoverKeyboard(containerRef, ".pap-popover__pick", [
+    notes.length,
+  ]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const picks = Array.from(
-      containerRef.current?.querySelectorAll<HTMLElement>(".pap-popover__pick") ??
-        [],
-    );
-    if (picks.length === 0) return;
-
-    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-      e.preventDefault();
-      const active = document.activeElement as HTMLElement | null;
-      const activePick = active?.closest<HTMLElement>(".pap-popover__pick") ??
-        active;
-      const idx = activePick ? picks.indexOf(activePick) : -1;
-      const next =
-        e.key === "ArrowDown"
-          ? picks[(idx + 1 + picks.length) % picks.length]
-          : picks[(idx - 1 + picks.length) % picks.length];
-      next?.focus();
-      return;
-    }
-
+    onArrowKey(e);
     // Control + Delete (or Control + Backspace, which is the main delete key on
     // Mac) on the focused row → trigger the existing two-step delete flow.
     if (e.ctrlKey && (e.key === "Backspace" || e.key === "Delete")) {
       e.preventDefault();
       const active = document.activeElement as HTMLElement | null;
       const row = active?.closest<HTMLElement>(".pap-popover__row");
-      const deleteBtn = row?.querySelector<HTMLButtonElement>(
-        ".pap-popover__delete",
-      );
-      deleteBtn?.click();
+      row?.querySelector<HTMLButtonElement>(".pap-popover__delete")?.click();
     }
   };
 
@@ -680,7 +949,7 @@ function NotesPopover({
       {...motionProps}
     >
       {notes.length === 0 ? (
-        <div className="pap-popover__empty">No notes yet</div>
+        <div className="pap-popover__empty">{t("notes.empty")}</div>
       ) : (
         notes.map((n) => (
           <NoteRow key={n.path} note={n} onPick={onPick} onDelete={onDelete} />
@@ -699,6 +968,7 @@ function NoteRow({
   onPick: (path: string) => void;
   onDelete: (path: string) => void;
 }) {
+  const t = useT();
   const [confirm, setConfirm] = useState(false);
   return (
     <div className="pap-popover__row pap-popover__row--note">
@@ -707,12 +977,12 @@ function NoteRow({
         className="pap-popover__pick"
         onClick={() => onPick(note.path)}
       >
-        <span className="pap-popover__label">{note.title || "Untitled"}</span>
+        <span className="pap-popover__label">{note.title || t("note.untitled")}</span>
         <span className="pap-popover__meta">{formatRelative(note.updated_at)}</span>
       </button>
       <motion.button
         type="button"
-        aria-label={confirm ? "Confirm delete" : "Delete note"}
+        aria-label={confirm ? t("notes.confirmDelete") : t("notes.delete")}
         className={`pap-popover__delete${confirm ? " is-confirm" : ""}`}
         onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
           e.stopPropagation();
@@ -746,6 +1016,46 @@ function PlusIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
       <path d="M8 3.5v9M3.5 8h9" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="8" r="2.1" />
+      <path d="M8 1.6v1.5M8 12.9v1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M1.6 8h1.5M12.9 8h1.5M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" />
+    </svg>
+  );
+}
+
+// Highlighter marker — used for the highlight/marca-texto format button.
+function MarkerIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9.5 3.2l3.3 3.3-5 5-3.3-3.3 5-5z" />
+      <path d="M4.5 8.2L2.8 12l3.8-1.7" />
+      <path d="M2.8 13.8h6" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6.5 9.5l3-3" />
+      <path d="M7.2 4.8l1-1a2.5 2.5 0 0 1 3.5 3.5l-1 1" />
+      <path d="M8.8 11.2l-1 1a2.5 2.5 0 0 1-3.5-3.5l1-1" />
+    </svg>
+  );
+}
+
+// Eraser — clear-formatting button.
+function EraserIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 12.5l-2.6-2.6a1.2 1.2 0 0 1 0-1.7l4.4-4.4a1.2 1.2 0 0 1 1.7 0l2.2 2.2a1.2 1.2 0 0 1 0 1.7l-4.9 4.9H7z" />
+      <path d="M3 13.5h9" />
     </svg>
   );
 }

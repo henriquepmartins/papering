@@ -7,6 +7,7 @@ import type { Editor } from "@tiptap/react";
 
 import { useT } from "../lib/i18n";
 import { BLOCK_COMMANDS, commandById } from "../lib/editor/commands";
+import { usePopoverKeyboard } from "./usePopoverKeyboard";
 
 const HOVER_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
 
@@ -120,10 +121,8 @@ export default function ContextMenu({
     setPos({ x: Math.max(pad, left), y: Math.max(pad, top) });
   }, [anchor]);
 
-  // Focus the first item so arrow keys work immediately.
-  useEffect(() => {
-    ref.current?.querySelector<HTMLElement>(".pap-context__item")?.focus();
-  }, []);
+  // Focus the first item on mount; wrap focus with arrow keys.
+  const onKeyDown = usePopoverKeyboard(ref, ".pap-context__item");
 
   // Escape / click-outside close.
   useEffect(() => {
@@ -144,21 +143,6 @@ export default function ContextMenu({
       document.removeEventListener("mousedown", onDown, true);
     };
   }, [editor, onClose]);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-    e.preventDefault();
-    const items = Array.from(
-      ref.current?.querySelectorAll<HTMLElement>(".pap-context__item") ?? [],
-    );
-    if (items.length === 0) return;
-    const idx = items.indexOf(document.activeElement as HTMLElement);
-    const next =
-      e.key === "ArrowDown"
-        ? items[(idx + 1 + items.length) % items.length]
-        : items[(idx - 1 + items.length) % items.length];
-    next?.focus();
-  };
 
   if (typeof document === "undefined") return null;
 
