@@ -39,6 +39,43 @@ pub fn apply_mac_style_mask(_window: &tauri::WebviewWindow) -> tauri::Result<()>
     Ok(())
 }
 
+/// Make the WKWebView grow/shrink with the window. Tauri/tao normally resize the
+/// webview in response to tao's own resize events, but our native `start_resize`
+/// drives the NSWindow via raw `setFrame:` (tao's resize path is a no-op on macOS),
+/// so those events never fire and the webview frame is left frozen at its initial
+/// size — the CSS viewport never grows, so the card stays small and the exposed
+/// area shows only the bare vibrancy backstop. Give the webview the same
+/// autoresizing mask the vibrancy view already uses (see `vibrancy.rs`) so AppKit
+/// keeps it filling the content view automatically on every `setFrame:`.
+#[cfg(target_os = "macos")]
+pub fn apply_webview_autoresize(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    use cocoa::base::{id, nil};
+    use cocoa::foundation::NSRect;
+    use objc::{msg_send, sel, sel_impl};
+
+    // NSViewWidthSizable (1<<1) | NSViewHeightSizable (1<<4).
+    const AUTORESIZE_WIDTH_HEIGHT: u64 = (1 << 1) | (1 << 4);
+
+    window.with_webview(|webview| unsafe {
+        let wk = webview.inner() as id; // macOS: PlatformWebview::inner() == WKWebView
+        // Pin the webview to its superview's current bounds first so the computed
+        // autoresizing margins are all zero (it fills the window at startup), then
+        // it stays full-bleed on every resize.
+        let superview: id = msg_send![wk, superview];
+        if superview != nil {
+            let bounds: NSRect = msg_send![superview, bounds];
+            let _: () = msg_send![wk, setFrame: bounds];
+        }
+        let _: () = msg_send![wk, setAutoresizingMask: AUTORESIZE_WIDTH_HEIGHT];
+    })?;
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn apply_webview_autoresize(_window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    Ok(())
+}
+
 /// Begin an interactive resize from `direction` (one of North/South/East/West
 /// and the four diagonals). Returns immediately; the drag runs on the main
 /// thread until mouse-up.

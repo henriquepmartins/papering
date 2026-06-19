@@ -3,8 +3,8 @@
      render above the icons, outside the rounded shell. The OS window itself
      is `transparent: true` so this padding shows the desktop directly.
      NOTE: this padding (50/20/10) and --radius-panel (14px) are mirrored as
-     PAD_*/CARD_RADIUS constants in src-tauri/src/vibrancy.rs, which insets the
-     native NSVisualEffectView to match the card — keep them in sync. */
+     the PAD_ and CARD_RADIUS constants in src-tauri/src/vibrancy.rs, which inset
+     the native NSVisualEffectView to match the card — keep them in sync. */
   .capture-window {
     width: 100vw;
     height: 100vh;

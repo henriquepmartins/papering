@@ -64,6 +64,14 @@ pub fn run() {
                     eprintln!("[papering] vibrancy failed: {err}");
                 }
 
+                // Make the WKWebView track the window size. Our native resize
+                // drives the NSWindow via raw `setFrame:`, which tao never sees,
+                // so without an autoresizing mask the webview frame (and its CSS
+                // viewport) would freeze at the initial size on resize.
+                if let Err(err) = window_style::apply_webview_autoresize(&capture_window) {
+                    eprintln!("[papering] webview autoresize failed: {err}");
+                }
+
                 // Centre on the active screen at startup.
                 let _ = capture_window.center();
 
