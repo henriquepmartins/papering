@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { useLocale, useT, type MessageKey } from "../lib/i18n";
@@ -173,7 +173,30 @@ function NoteRow({
   onDelete: (path: string) => void;
 }) {
   const t = useT();
+  // Two-step delete: the first click arms the confirm state, which auto-disarms
+  // after 2.5s. The timer is tracked so it's cleared on unmount (the row often
+  // disappears mid-countdown after a delete) and re-armed cleanly.
   const [confirm, setConfirm] = useState(false);
+  const disarm = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (disarm.current) clearTimeout(disarm.current);
+    },
+    [],
+  );
+
+  const onDeleteClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (disarm.current) clearTimeout(disarm.current);
+    if (confirm) {
+      onDelete(note.path);
+      setConfirm(false);
+    } else {
+      setConfirm(true);
+      disarm.current = setTimeout(() => setConfirm(false), 2500);
+    }
+  };
+
   return (
     <div className="pap-popover__row pap-popover__row--note">
       <button
@@ -188,16 +211,7 @@ function NoteRow({
         type="button"
         aria-label={confirm ? t("notes.confirmDelete") : t("notes.delete")}
         className={`pap-popover__delete${confirm ? " is-confirm" : ""}`}
-        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-          e.stopPropagation();
-          if (confirm) {
-            onDelete(note.path);
-            setConfirm(false);
-          } else {
-            setConfirm(true);
-            setTimeout(() => setConfirm(false), 2500);
-          }
-        }}
+        onClick={onDeleteClick}
         whileTap={{ scale: 0.93 }}
         transition={{ duration: 0.12, ease: HOVER_EASE }}
       >
