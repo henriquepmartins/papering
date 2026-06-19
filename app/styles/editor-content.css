@@ -1,0 +1,283 @@
+@layer base {
+  /* Tiptap editor surface — the .tiptap class is set in useCaptureEditor
+     (editorProps.attributes.class), which Tiptap applies to its
+     .ProseMirror contenteditable. We keep all editor typography under
+     .editor-host .tiptap so the rules don't leak elsewhere. */
+  .editor-host {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: none;
+  }
+
+  .editor-host .tiptap {
+    flex: 1 1 auto;
+    min-height: 100%;
+    padding: 8px 24px 24px;
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    caret-color: var(--color-caret);
+    outline: none;
+  }
+
+  .editor-host .tiptap > * + * {
+    margin-top: 0.4em;
+  }
+
+  /* Headings */
+  .editor-host .tiptap h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.012em;
+    line-height: 1.25;
+    margin: 0.4em 0 0.1em;
+  }
+  .editor-host .tiptap h2 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.006em;
+    line-height: 1.3;
+    margin: 0.4em 0 0.1em;
+  }
+  .editor-host .tiptap h3 {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin: 0.4em 0 0.1em;
+  }
+
+  /* Paragraph */
+  .editor-host .tiptap p {
+    margin: 0;
+  }
+
+  /* Pasted images */
+  .editor-host .tiptap img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+    margin: 0.5em 0;
+  }
+  .editor-host .tiptap img.ProseMirror-selectednode {
+    outline: 2px solid var(--color-caret);
+    outline-offset: 1px;
+  }
+
+  /* Inline */
+  .editor-host .tiptap strong {
+    font-weight: 600;
+  }
+  .editor-host .tiptap em {
+    font-style: italic;
+  }
+  .editor-host .tiptap s,
+  .editor-host .tiptap del {
+    text-decoration: line-through;
+    text-decoration-color: var(--color-text-faint);
+    color: var(--color-text-muted);
+  }
+  .editor-host .tiptap u {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--color-text-muted);
+  }
+  .editor-host .tiptap a {
+    color: var(--color-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--color-accent);
+  }
+  /* Highlight (marca-texto) — classic warm yellow marker. Round-trips through
+     markdown as ==text== via MarkdownHighlight. */
+  .editor-host .tiptap mark {
+    background: #fdf0a6;
+    color: inherit;
+    padding: 1px 3px;
+    border-radius: 3px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  .editor-host .tiptap code {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: oklch(0 0 0 / 0.05);
+    border: 1px solid var(--color-border);
+  }
+
+  /* Lists — explicit list-style required because Tailwind v4 Preflight
+     resets `list-style: none` on all ul/ol globally. */
+  .editor-host .tiptap ul,
+  .editor-host .tiptap ol {
+    padding-left: 1.4em;
+    margin: 0;
+  }
+  .editor-host .tiptap ul {
+    list-style: disc;
+  }
+  .editor-host .tiptap ol {
+    list-style: decimal;
+  }
+  .editor-host .tiptap li {
+    margin: 0;
+  }
+  .editor-host .tiptap li > p {
+    margin: 0;
+  }
+  .editor-host .tiptap ul li::marker {
+    color: var(--color-text-muted);
+  }
+  .editor-host .tiptap ol li::marker {
+    color: var(--color-accent);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Task list — Tiptap renders <ul data-type="taskList"> with <li data-type="taskItem"> > <label><input/></label> + <div> */
+  .editor-host .tiptap ul[data-type="taskList"] {
+    list-style: none;
+    padding-left: 0;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] li {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] li > label {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    margin-top: 5px;
+    user-select: none;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] li > div {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1.5px solid var(--color-accent);
+    background: transparent;
+    position: relative;
+    margin: 0;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] input[type="checkbox"]:checked {
+    background: var(--color-accent);
+  }
+  .editor-host .tiptap ul[data-type="taskList"] input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 8.4l2.6 2.6L12 5.6'/></svg>");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+  .editor-host .tiptap ul[data-type="taskList"] li[data-checked="true"] > div {
+    color: var(--color-text-muted);
+    text-decoration: line-through;
+    text-decoration-color: var(--color-text-faint);
+  }
+
+  /* Blockquote */
+  .editor-host .tiptap blockquote {
+    border-left: 3px solid var(--color-border-strong);
+    padding-left: 10px;
+    margin: 0;
+    color: var(--color-text-muted);
+    font-style: italic;
+  }
+
+  /* Fenced code block */
+  .editor-host .tiptap pre {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: oklch(0 0 0 / 0.04);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .editor-host .tiptap pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: inherit;
+    border-radius: 0;
+  }
+
+  /* Horizontal rule */
+  .editor-host .tiptap hr {
+    border: 0;
+    border-top: 1px solid var(--color-border-strong);
+    margin: 12px 0;
+  }
+
+  /* Tables (GFM) */
+  .editor-host .tiptap table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 8px 0;
+    font-size: 14px;
+    table-layout: fixed;
+    overflow: hidden;
+  }
+  .editor-host .tiptap th,
+  .editor-host .tiptap td {
+    border: 1px solid var(--color-border-strong);
+    padding: 5px 9px;
+    text-align: left;
+    vertical-align: top;
+    min-width: 40px;
+  }
+  .editor-host .tiptap th {
+    background: oklch(0 0 0 / 0.04);
+    font-weight: 600;
+  }
+  .editor-host .tiptap th > *,
+  .editor-host .tiptap td > * {
+    margin: 0;
+  }
+  /* Cell selected via the table’s column/cell selection. */
+  .editor-host .tiptap .selectedCell::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: var(--color-selection);
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .editor-host .tiptap td,
+  .editor-host .tiptap th {
+    position: relative;
+  }
+
+  /* Placeholder (empty doc) — Tiptap Placeholder ext adds .is-editor-empty
+     and a data-placeholder attr to the first empty node. */
+  .editor-host .tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    color: var(--color-text-faint);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
+  /* Selection inside the editor */
+  .editor-host .tiptap ::selection {
+    background: var(--color-selection);
+  }
+}

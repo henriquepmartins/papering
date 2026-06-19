@@ -1,0 +1,46 @@
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+  }
+
+  ::selection {
+    background: var(--color-selection);
+  }
+
+  /* Chrome icons are all inline SVGs — stop them being dragged out as a ghost
+     image (a web tell). Editor content uses <img>, which stays draggable. */
+  svg {
+    -webkit-user-drag: none;
+  }
+
+  .editor-host,
+  .editor-host * {
+    cursor: text;
+  }
+
+  /* Task-list checkboxes are interactive — show the native arrow cursor rather
+     than inheriting the blanket `cursor: text` above. (No `pointer`: a hand
+     cursor on controls is a web tell.) */
+  .editor-host input[type="checkbox"],
+  .editor-host ul[data-type="taskList"] > li > label {
+    cursor: default;
+  }
+}

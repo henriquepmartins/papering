@@ -1,0 +1,309 @@
+@layer base {
+  /* Outer frame: invisible padding around the visible card so tooltips can
+     render above the icons, outside the rounded shell. The OS window itself
+     is `transparent: true` so this padding shows the desktop directly.
+     NOTE: this padding (50/20/10) and --radius-panel (14px) are mirrored as
+     PAD_*/CARD_RADIUS constants in src-tauri/src/vibrancy.rs, which insets the
+     native NSVisualEffectView to match the card — keep them in sync. */
+  .capture-window {
+    width: 100vw;
+    height: 100vh;
+    padding: 50px 20px 10px;
+    position: relative;
+    /* No rubber-band/overscroll glow — a web-scroll tell. */
+    overscroll-behavior: none;
+  }
+
+  /* Invisible resize handles tracing the OS window edges. macOS hides them
+     because `decorations: false` removes the OS chrome — these add the
+     missing grab regions in the transparent padding zone. */
+  .capture-resize {
+    position: absolute;
+    /* Alpha must be >= 1/255 (≈0.0039) so the 8-bit compositor never rounds it
+       to 0. On a `transparent: true` macOS window the OS derives the clickable
+       window shape from rendered pixel alpha: a fully-transparent pixel is
+       click-through, so mousedown never reaches the band and resize silently
+       fails. (The old 0.001 rounded to 0 — that was the bug.) This keeps the
+       band invisible while making it hit-testable. */
+    background: rgba(0, 0, 0, 0.004);
+  }
+  /* The four edges fully tile the transparent padding frame (50px 20px 10px),
+     each spanning its whole side and filling that side's padding thickness, so
+     the entire border around the visible card is grabbable. Edges stop exactly
+     at the card border, touching but never overlapping the interactive shell or
+     its `data-tauri-drag-region` titlebar. Overlaps occur only in the corners,
+     where z-index resolves them deterministically: corners (12) > N/S (11) >
+     W/E (10). */
+  .capture-resize--n {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    cursor: ns-resize;
+    z-index: 11;
+  }
+  .capture-resize--s {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 10px;
+    cursor: ns-resize;
+    z-index: 11;
+  }
+  .capture-resize--w {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 20px;
+    cursor: ew-resize;
+    z-index: 10;
+  }
+  .capture-resize--e {
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 20px;
+    cursor: ew-resize;
+    z-index: 10;
+  }
+  /* 28×28 corners override the edges in the diagonal zones. */
+  .capture-resize--nw {
+    top: 0;
+    left: 0;
+    width: 28px;
+    height: 28px;
+    cursor: nwse-resize;
+    z-index: 12;
+  }
+  .capture-resize--ne {
+    top: 0;
+    right: 0;
+    width: 28px;
+    height: 28px;
+    cursor: nesw-resize;
+    z-index: 12;
+  }
+  .capture-resize--sw {
+    bottom: 0;
+    left: 0;
+    width: 28px;
+    height: 28px;
+    cursor: nesw-resize;
+    z-index: 12;
+  }
+  .capture-resize--se {
+    bottom: 0;
+    right: 0;
+    width: 28px;
+    height: 28px;
+    cursor: nwse-resize;
+    z-index: 12;
+  }
+
+  .capture-shell {
+    width: 100%;
+    height: 100%;
+    border-radius: var(--radius-panel);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    /* Frosted glass (Raycast Notes look). Two layers compose:
+       1. CSS `backdrop-filter` blurs the desktop directly behind the
+          transparent webview — this is what reads as the visible frost.
+       2. The always-active NSVisualEffectView (Sidebar / State::Active) pinned
+          behind the webview in `src-tauri/src/vibrancy.rs` sits underneath as a
+          focus-independent backstop: WebKit fades `backdrop-filter` toward zero
+          on unfocused windows, and the native layer absorbs most of that drop.
+       A single low-opacity warm tint sits on top so the blur shows through. */
+    background: rgba(240, 240, 240, 0.5);
+    backdrop-filter: blur(30px) saturate(1.8);
+    -webkit-backdrop-filter: blur(30px) saturate(1.8);
+    box-shadow:
+      inset 0 0 0 1px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  }
+
+  .capture-shell > .editor-host {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+  }
+
+  .capture-titlebar {
+    flex: 0 0 auto;
+    height: 38px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 0 14px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .capture-titlebar__title {
+    grid-column: 2;
+    font-size: 13px;
+    color: var(--color-text-faint);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60vw;
+  }
+
+  .capture-titlebar__icons {
+    grid-column: 3;
+    justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 140ms var(--ease-out);
+  }
+
+  .capture-titlebar__icon-wrap {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .capture-shell:hover .capture-titlebar__icons,
+  .capture-titlebar__icons:focus-within {
+    opacity: 0.75;
+  }
+
+  /* Motion handles background + scale on hover/tap; CSS only manages base look
+     and color (the latter is too tiny a change to merit a JS-driven transition). */
+  .capture-titlebar__icons button {
+    all: unset;
+    width: 26px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    border-radius: 6px;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: color 140ms var(--ease-out);
+  }
+
+  .capture-titlebar__icons button:focus,
+  .capture-titlebar__icons button:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  .capture-titlebar__icons button:hover {
+    color: var(--color-text);
+  }
+
+  .capture-titlebar__icons svg {
+    width: 14px;
+    height: 14px;
+    stroke-width: 1.6;
+  }
+
+  .cmd-glyph {
+    font-family: -apple-system, "SF Pro Display", system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .capture-hints {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    height: 30px;
+    padding: 0 14px;
+    font-size: 11px;
+    color: var(--color-text-faint);
+    border-top: 1px solid var(--color-border);
+    background: oklch(1 0 0 / 0.04);
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .capture-hints__count {
+    grid-column: 2;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+  }
+
+  .capture-hints__format-wrap {
+    grid-column: 3;
+    justify-self: end;
+    position: relative;
+    display: inline-flex;
+  }
+
+  .capture-hints__format {
+    all: unset;
+    font-family: "Times New Roman", Georgia, serif;
+    font-style: italic;
+    font-size: 14px;
+    color: var(--color-text-faint);
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 120ms ease, color 120ms ease;
+  }
+
+  .capture-hints__format:hover {
+    background: oklch(0 0 0 / 0.05);
+    color: var(--color-text);
+  }
+
+  /* Tooltips on titlebar icons — rendered via React portal to <body>, so the
+     positioning is set inline on `.pap-tooltip-portal`. This class only owns
+     visual styling. The portal anchor lives in the transparent padding above
+     the visible shell, escaping `overflow: hidden` clipping. */
+  .pap-tooltip-portal {
+    position: fixed;
+    transform: translate(-50%, -100%);
+    pointer-events: none;
+    z-index: 60;
+  }
+
+  /* Tooltip flipped below its anchor (used when there's no room above, e.g. a
+     format button near the top of the window). */
+  .pap-tooltip-portal--below {
+    transform: translate(-50%, 0);
+  }
+
+  .pap-tooltip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px 6px 10px;
+    border-radius: 8px;
+    background: #ffffff;
+    color: var(--color-text);
+    font-size: 12px;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow:
+      0 0 0 1px rgba(0, 0, 0, 0.06),
+      0 6px 18px -4px rgba(0, 0, 0, 0.18),
+      0 2px 4px -2px rgba(0, 0, 0, 0.10);
+  }
+
+  .pap-tooltip__kbd {
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif;
+    font-size: 11px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--color-text);
+  }
+}

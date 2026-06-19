@@ -1,0 +1,150 @@
+@layer base {
+  /* Popovers (shortcuts + notes list) */
+  .pap-popover {
+    position: absolute;
+    top: 36px;
+    right: 12px;
+    min-width: 220px;
+    max-width: 320px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: 10px;
+    background: oklch(1 0 0 / 0.92);
+    box-shadow:
+      0 1px 0 oklch(1 0 0 / 0.6) inset,
+      0 0 0 1px oklch(0 0 0 / 0.08),
+      0 12px 28px -6px oklch(0 0 0 / 0.18),
+      0 4px 8px -2px oklch(0 0 0 / 0.08);
+    backdrop-filter: blur(20px) saturate(1.3);
+    -webkit-backdrop-filter: blur(20px) saturate(1.3);
+    font-size: 13px;
+    color: var(--color-text);
+    z-index: 50;
+  }
+
+  .pap-popover__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    outline: none;
+  }
+
+  .pap-popover__row:focus,
+  .pap-popover__row:focus-visible {
+    background: oklch(0 0 0 / 0.06);
+    outline: none;
+  }
+
+  .pap-popover__row + .pap-popover__row {
+    margin-top: 1px;
+  }
+
+  .pap-popover__row--button {
+    background: transparent;
+    border: 0;
+    width: 100%;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+  }
+
+  .pap-popover__row--button:hover {
+    background: oklch(0 0 0 / 0.05);
+  }
+
+  /* Notes-list row: pick button + delete button side by side. */
+  .pap-popover__row--note {
+    padding: 0;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .pap-popover__row--note:hover,
+  .pap-popover__row--note:focus-within {
+    background: oklch(0 0 0 / 0.04);
+  }
+
+  .pap-popover__pick {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 6px 8px;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    outline: none;
+  }
+
+  .pap-popover__pick:focus,
+  .pap-popover__pick:focus-visible {
+    outline: none;
+  }
+
+  .pap-popover__delete {
+    all: unset;
+    width: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-faint);
+    opacity: 0;
+    border-radius: 6px;
+    margin: 3px;
+    transition: opacity 140ms var(--ease-out),
+      color 140ms var(--ease-out),
+      background 140ms var(--ease-out);
+  }
+
+  .pap-popover__row--note:hover .pap-popover__delete,
+  .pap-popover__row--note:focus-within .pap-popover__delete {
+    opacity: 1;
+  }
+
+  .pap-popover__delete:hover {
+    color: var(--color-accent);
+    background: rgba(251, 228, 227, 0.6);
+  }
+
+  .pap-popover__delete.is-confirm {
+    opacity: 1;
+    color: oklch(0.99 0 0);
+    background: var(--color-accent);
+  }
+
+  .pap-popover__delete svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .pap-popover__label {
+    color: var(--color-text);
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pap-popover__meta {
+    color: var(--color-text-faint);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    flex: 0 0 auto;
+  }
+
+  .pap-popover__empty {
+    padding: 16px 10px;
+    text-align: center;
+    color: var(--color-text-faint);
+    font-size: 12px;
+  }
+}
