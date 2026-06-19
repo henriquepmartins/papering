@@ -13,10 +13,18 @@ import { useCaptureEditor } from "../lib/editor/tiptap";
 import { setAttachmentsBase } from "../lib/editor/extensions";
 import { checkForUpdates } from "../lib/updater";
 import { useLocale, useT, type MessageKey } from "../lib/i18n";
-import { LOCALES } from "../lib/i18n/messages";
 import { clearFormatting, toggleLink } from "../lib/editor/commands";
 import { useTooltip } from "./useTooltip";
-import { usePopoverKeyboard } from "./usePopoverKeyboard";
+import { HOVER_EASE, HOVER_BG, TRANSPARENT } from "./ui-motion";
+import { ShortcutsPopover, SettingsPopover, NotesPopover } from "./popovers";
+import {
+  EraserIcon,
+  GearIcon,
+  LinkIcon,
+  MarkerIcon,
+  NotesIcon,
+  PlusIcon,
+} from "./icons";
 import ContextMenu, { type ContextAnchor } from "./ContextMenu";
 import WelcomeCard from "./WelcomeCard";
 
@@ -65,10 +73,6 @@ import {
 
 const SAVE_DEBOUNCE_MS = 400;
 
-const HOVER_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
-const HOVER_BG = "rgba(0, 0, 0, 0.06)";
-const TRANSPARENT = "rgba(0, 0, 0, 0)";
-
 function stripMarkdownInline(line: string): string {
   return line
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
@@ -92,17 +96,6 @@ function deriveTitle(doc: string, fallback: string): string {
     if (cleaned) return cleaned.slice(0, 80);
   }
   return fallback;
-}
-
-function formatRelative(unixSeconds: number): string {
-  if (!unixSeconds) return "";
-  const diff = Date.now() / 1000 - unixSeconds;
-  if (diff < 60) return "now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d`;
-  const d = new Date(unixSeconds * 1000);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 type Popover = null | "shortcuts" | "notes" | "settings";
@@ -624,99 +617,6 @@ function IconButton({
   );
 }
 
-// Motion props for the title-bar popovers. `instant` (keyboard-triggered) skips
-// the enter animation entirely; Reduce Motion keeps the opacity fade but drops
-// the position/scale movement. Origin is the top-right trigger icons, so it
-// scales out from the button rather than from its own center.
-function usePopoverMotion(instant: boolean) {
-  const reduce = !!useReducedMotion();
-  const offset = reduce ? {} : { y: -4, scale: 0.97 };
-  return {
-    initial: instant ? false : { opacity: 0, ...offset },
-    animate: { opacity: 1, y: 0, scale: 1 },
-    exit: { opacity: 0, ...offset, transition: { duration: instant ? 0.08 : 0.1 } },
-    transition: { duration: instant ? 0 : 0.16, ease: HOVER_EASE },
-    style: { transformOrigin: "top right" as const },
-  };
-}
-
-const SHORTCUT_ROWS: Array<[MessageKey, string]> = [
-  ["sc.capture", "⌃⌥N"],
-  ["sc.newNote", "⌘N"],
-  ["sc.openNotes", "⌘O"],
-  ["sc.settings", "⌘,"],
-  ["sc.saveClose", "Esc"],
-  ["sc.bold", "⌘B"],
-  ["sc.italic", "⌘I"],
-  ["sc.code", "⌘E"],
-  ["sc.strike", "⌘⇧X"],
-];
-
-function ShortcutsPopover({ instant }: { instant: boolean }) {
-  const t = useT();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const motionProps = usePopoverMotion(instant);
-  const onKeyDown = usePopoverKeyboard(containerRef, ".pap-popover__row");
-
-  return (
-    <motion.div
-      ref={containerRef}
-      className="pap-popover"
-      role="menu"
-      onKeyDown={onKeyDown}
-      {...motionProps}
-    >
-      {SHORTCUT_ROWS.map(([key, keys]) => (
-        <div
-          className="pap-popover__row"
-          role="menuitem"
-          tabIndex={0}
-          key={key}
-        >
-          <span className="pap-popover__label">{t(key)}</span>
-          <span className="pap-popover__meta">{keys}</span>
-        </div>
-      ))}
-    </motion.div>
-  );
-}
-
-// Settings popover — currently the language picker; room for more preferences.
-function SettingsPopover({ instant }: { instant: boolean }) {
-  const t = useT();
-  const { locale, setLocale } = useLocale();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const motionProps = usePopoverMotion(instant);
-  const onKeyDown = usePopoverKeyboard(containerRef, ".pap-popover__row--button");
-
-  return (
-    <motion.div
-      ref={containerRef}
-      className="pap-popover"
-      role="menu"
-      onKeyDown={onKeyDown}
-      {...motionProps}
-    >
-      <div className="pap-popover__section">{t("settings.language")}</div>
-      {LOCALES.map((loc) => (
-        <button
-          type="button"
-          key={loc}
-          role="menuitemradio"
-          aria-checked={locale === loc}
-          className="pap-popover__row pap-popover__row--button"
-          onClick={() => setLocale(loc)}
-        >
-          <span className="pap-popover__label">
-            {loc === "pt" ? t("settings.lang.pt") : t("settings.lang.en")}
-          </span>
-          <span className="pap-popover__check">{locale === loc ? "✓" : ""}</span>
-        </button>
-      ))}
-    </motion.div>
-  );
-}
-
 // Shared formatting controls used by both the selection bubble menu and the
 // footer "T" popover. Active states are read reactively via useEditorState so
 // the buttons highlight as the cursor moves.
@@ -910,160 +810,3 @@ function FormatPopover({
   );
 }
 
-function NotesPopover({
-  notes,
-  onPick,
-  onDelete,
-  instant,
-}: {
-  notes: NoteMeta[];
-  onPick: (path: string) => void;
-  onDelete: (path: string) => void;
-  instant: boolean;
-}) {
-  const t = useT();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const motionProps = usePopoverMotion(instant);
-  const onArrowKey = usePopoverKeyboard(containerRef, ".pap-popover__pick", [
-    notes.length,
-  ]);
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    onArrowKey(e);
-    // Control + Delete (or Control + Backspace, which is the main delete key on
-    // Mac) on the focused row → trigger the existing two-step delete flow.
-    if (e.ctrlKey && (e.key === "Backspace" || e.key === "Delete")) {
-      e.preventDefault();
-      const active = document.activeElement as HTMLElement | null;
-      const row = active?.closest<HTMLElement>(".pap-popover__row");
-      row?.querySelector<HTMLButtonElement>(".pap-popover__delete")?.click();
-    }
-  };
-
-  return (
-    <motion.div
-      ref={containerRef}
-      className="pap-popover"
-      role="menu"
-      onKeyDown={onKeyDown}
-      {...motionProps}
-    >
-      {notes.length === 0 ? (
-        <div className="pap-popover__empty">{t("notes.empty")}</div>
-      ) : (
-        notes.map((n) => (
-          <NoteRow key={n.path} note={n} onPick={onPick} onDelete={onDelete} />
-        ))
-      )}
-    </motion.div>
-  );
-}
-
-function NoteRow({
-  note,
-  onPick,
-  onDelete,
-}: {
-  note: NoteMeta;
-  onPick: (path: string) => void;
-  onDelete: (path: string) => void;
-}) {
-  const t = useT();
-  const [confirm, setConfirm] = useState(false);
-  return (
-    <div className="pap-popover__row pap-popover__row--note">
-      <button
-        type="button"
-        className="pap-popover__pick"
-        onClick={() => onPick(note.path)}
-      >
-        <span className="pap-popover__label">{note.title || t("note.untitled")}</span>
-        <span className="pap-popover__meta">{formatRelative(note.updated_at)}</span>
-      </button>
-      <motion.button
-        type="button"
-        aria-label={confirm ? t("notes.confirmDelete") : t("notes.delete")}
-        className={`pap-popover__delete${confirm ? " is-confirm" : ""}`}
-        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
-          e.stopPropagation();
-          if (confirm) {
-            onDelete(note.path);
-            setConfirm(false);
-          } else {
-            setConfirm(true);
-            setTimeout(() => setConfirm(false), 2500);
-          }
-        }}
-        whileTap={{ scale: 0.93 }}
-        transition={{ duration: 0.12, ease: HOVER_EASE }}
-      >
-        <TrashIcon />
-      </motion.button>
-    </div>
-  );
-}
-
-function NotesIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="2.5" width="9" height="11" rx="1.4" />
-      <path d="M5 5.5h5M5 8h5M5 10.5h3.2" />
-    </svg>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 3.5v9M3.5 8h9" />
-    </svg>
-  );
-}
-
-function GearIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="8" cy="8" r="2.1" />
-      <path d="M8 1.6v1.5M8 12.9v1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M1.6 8h1.5M12.9 8h1.5M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" />
-    </svg>
-  );
-}
-
-// Highlighter marker — used for the highlight/marca-texto format button.
-function MarkerIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9.5 3.2l3.3 3.3-5 5-3.3-3.3 5-5z" />
-      <path d="M4.5 8.2L2.8 12l3.8-1.7" />
-      <path d="M2.8 13.8h6" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function LinkIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6.5 9.5l3-3" />
-      <path d="M7.2 4.8l1-1a2.5 2.5 0 0 1 3.5 3.5l-1 1" />
-      <path d="M8.8 11.2l-1 1a2.5 2.5 0 0 1-3.5-3.5l1-1" />
-    </svg>
-  );
-}
-
-// Eraser — clear-formatting button.
-function EraserIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M7 12.5l-2.6-2.6a1.2 1.2 0 0 1 0-1.7l4.4-4.4a1.2 1.2 0 0 1 1.7 0l2.2 2.2a1.2 1.2 0 0 1 0 1.7l-4.9 4.9H7z" />
-      <path d="M3 13.5h9" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5">
-      <path d="M3 4.5h10M6.5 4V3.2c0-.5.4-.7.8-.7h1.4c.4 0 .8.2.8.7V4M5 4.5l.6 8c0 .5.4.8.9.8h3c.5 0 .9-.3.9-.8l.6-8" />
-    </svg>
-  );
-}
