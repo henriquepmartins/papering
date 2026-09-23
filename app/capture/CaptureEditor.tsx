@@ -65,6 +65,7 @@ import {
   captureReady,
   deleteNote,
   hideCapture,
+  isTauri,
   listNotes,
   loadNote,
   type NoteMeta,
@@ -302,6 +303,7 @@ export default function CaptureEditor() {
 
   // Backend → frontend: global hotkey (⌃⌥N) — resume most recent note or start fresh.
   useEffect(() => {
+    if (!isTauri()) return;
     const win = getCurrentWindow();
     const unlistenPromise = win.listen("pap://open-last-or-new", () => {
       void actionsRef.current.handleOpenLastOrNew();
@@ -786,7 +788,10 @@ function FormatPopover({
       onClose();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
     };
     document.addEventListener("mousedown", onDown, true);
     document.addEventListener("keydown", onKey, true);

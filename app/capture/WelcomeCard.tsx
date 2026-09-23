@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { useT, type MessageKey } from "../lib/i18n";
@@ -20,6 +21,17 @@ const TIPS: { badge: string; key: MessageKey }[] = [
 export default function WelcomeCard({ onDismiss }: { onDismiss: () => void }) {
   const t = useT();
   const reduce = !!useReducedMotion();
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      onDismiss();
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onDismiss]);
 
   return (
     <motion.div

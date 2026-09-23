@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { Extension, type Editor, type Range } from "@tiptap/core";
+import { PluginKey } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion, {
   type SuggestionKeyDownProps,
@@ -132,12 +133,15 @@ const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(
 
 // ── Extension ─────────────────────────────────────────────────────────────────
 
+export const slashPluginKey = new PluginKey("slashCommand");
+
 export const SlashCommand = Extension.create({
   name: "slashCommand",
 
   addProseMirrorPlugins() {
     return [
       Suggestion<SlashItem>({
+        pluginKey: slashPluginKey,
         editor: this.editor,
         char: "/",
         // Only trigger at the start of an empty-ish text block so "/" inside a
@@ -199,13 +203,7 @@ export const SlashCommand = Extension.create({
               });
               reposition(props);
             },
-            onKeyDown: (props) => {
-              if (props.event.key === "Escape") {
-                component?.element.remove();
-                return false;
-              }
-              return component?.ref?.onKeyDown(props) ?? false;
-            },
+            onKeyDown: (props) => component?.ref?.onKeyDown(props) ?? false,
             onExit: () => {
               component?.element.remove();
               component?.destroy();

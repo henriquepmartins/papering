@@ -2,6 +2,7 @@ import { type Editor, useEditor } from "@tiptap/react";
 import { useRef } from "react";
 
 import { editorExtensions } from "./extensions";
+import { slashPluginKey } from "./slashCommand";
 
 export type CaptureEditorParams = {
   onChange?: (markdown: string) => void;
@@ -36,8 +37,11 @@ export function useCaptureEditor({
       attributes: {
         class: "tiptap",
       },
-      handleKeyDown: (_view, event) => {
+      // Editor props run before plugin props, so an open slash menu must get
+      // Escape first or it would hide the window instead of closing the menu.
+      handleKeyDown: (view, event) => {
         if (event.key === "Escape") {
+          if (slashPluginKey.getState(view.state)?.active) return false;
           onEscapeRef.current?.();
           return true;
         }
