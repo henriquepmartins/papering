@@ -8,8 +8,9 @@
     max-width: 320px;
     max-height: 60vh;
     overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 6px;
-    border-radius: 10px;
+    border-radius: 12px;
     background: oklch(1 0 0 / 0.92);
     box-shadow:
       0 1px 0 oklch(1 0 0 / 0.6) inset,
@@ -21,6 +22,7 @@
     font-size: 13px;
     color: var(--color-text);
     z-index: 50;
+    outline: none;
   }
 
   .pap-popover__row {
@@ -52,10 +54,6 @@
     text-align: left;
   }
 
-  .pap-popover__row--button:hover {
-    background: oklch(0 0 0 / 0.05);
-  }
-
   /* Notes-list row: pick button + delete button side by side. */
   .pap-popover__row--note {
     padding: 0;
@@ -63,7 +61,6 @@
     gap: 0;
   }
 
-  .pap-popover__row--note:hover,
   .pap-popover__row--note:focus-within {
     background: oklch(0 0 0 / 0.04);
   }
@@ -97,7 +94,7 @@
     justify-content: center;
     color: var(--color-text-faint);
     opacity: 0;
-    border-radius: 6px;
+    border-radius: 3px;
     margin: 3px;
     transition: opacity 140ms var(--ease-out),
       color 140ms var(--ease-out),

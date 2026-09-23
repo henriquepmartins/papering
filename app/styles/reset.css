@@ -17,8 +17,12 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    font-variant-numeric: tabular-nums;
     overflow: hidden;
+    /* App chrome is not a document: no text selection, arrow cursor. The
+       editor opts back in below. */
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
   }
 
   ::selection {
@@ -34,6 +38,20 @@
   .editor-host,
   .editor-host * {
     cursor: text;
+  }
+
+  .editor-host .tiptap {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Keyboard focus ring for chrome buttons that have no row highlight. */
+  .capture-titlebar__icons button:focus-visible,
+  .capture-hints__format:focus-visible,
+  .pap-popover__delete:focus-visible,
+  .pap-welcome__dismiss:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-accent) 45%, transparent);
   }
 
   /* Task-list checkboxes are interactive — show the native arrow cursor rather

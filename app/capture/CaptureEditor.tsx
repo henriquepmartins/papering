@@ -475,20 +475,15 @@ export default function CaptureEditor() {
             {t("hints.characters", { n: charCount })}
           </span>
           <div className="capture-hints__format-wrap">
-            <button
-              type="button"
-              className="capture-hints__format"
-              title={t("btn.formatting")}
-              aria-label={t("btn.formatting")}
+            <FormatToggle
+              label={t("btn.formatting")}
               onClick={() => {
                 setPopover(null);
                 setCtxMenu(null);
                 setFormatOpen((v) => !v);
                 editor?.commands.focus();
               }}
-            >
-              T
-            </button>
+            />
             <AnimatePresence>
               {formatOpen && editor && (
                 <FormatPopover editor={editor} onClose={() => setFormatOpen(false)} />
@@ -496,6 +491,9 @@ export default function CaptureEditor() {
             </AnimatePresence>
           </div>
         </footer>
+        <AnimatePresence>
+          {showWelcome && <WelcomeCard onDismiss={dismissWelcome} />}
+        </AnimatePresence>
       </div>
       {ctxMenu && (
         <ContextMenu
@@ -508,9 +506,6 @@ export default function CaptureEditor() {
           onShortcuts={openShortcuts}
         />
       )}
-      <AnimatePresence>
-        {showWelcome && <WelcomeCard onDismiss={dismissWelcome} />}
-      </AnimatePresence>
     </div>
   );
 }
@@ -527,7 +522,6 @@ function IconButton({
   children: React.ReactNode;
 }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const portalRef = useRef<HTMLDivElement>(null);
   const reduce = !!useReducedMotion();
   const {
     anchor: tipAnchor,
@@ -536,26 +530,11 @@ function IconButton({
     mounted,
     start: onHoverStart,
     end: onHoverEnd,
-  } = useTooltip(() => {
+  } = useTooltip<TipAnchor>(() => {
     const rect = buttonRef.current?.getBoundingClientRect();
     if (!rect) return null;
     return { top: rect.top - 6, left: rect.left + rect.width / 2 };
   });
-
-  // Clamp the tooltip into the viewport after first paint so right-edge icons
-  // don't push it past the OS window bounds.
-  useLayoutEffect(() => {
-    if (!tipAnchor || !portalRef.current) return;
-    const tipRect = portalRef.current.getBoundingClientRect();
-    const halfWidth = tipRect.width / 2;
-    const pad = 8;
-    const minLeft = pad + halfWidth;
-    const maxLeft = window.innerWidth - pad - halfWidth;
-    if (tipAnchor.left < minLeft - 0.5 || tipAnchor.left > maxLeft + 0.5) {
-      const clamped = Math.max(minLeft, Math.min(tipAnchor.left, maxLeft));
-      setTipAnchor({ top: tipAnchor.top, left: clamped });
-    }
-  }, [tipAnchor, setTipAnchor]);
 
   return (
     <div className="capture-titlebar__icon-wrap">
@@ -577,45 +556,112 @@ function IconButton({
       >
         {children}
       </motion.button>
-      {mounted &&
-        createPortal(
-          <AnimatePresence>
-            {tipAnchor && (
-              <div
-                ref={portalRef}
-                className="pap-tooltip-portal"
-                style={{ top: tipAnchor.top, left: tipAnchor.left }}
-              >
-                <motion.div
-                  className="pap-tooltip"
-                  initial={
-                    tipInstant
-                      ? false
-                      : { opacity: 0, ...(reduce ? {} : { y: 4, scale: 0.97 }) }
-                  }
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{
-                    opacity: 0,
-                    ...(reduce ? {} : { y: 4, scale: 0.97 }),
-                    transition: { duration: tipInstant ? 0 : 0.1 },
-                  }}
-                  transition={{ duration: tipInstant ? 0 : 0.15, ease: HOVER_EASE }}
-                  style={{ transformOrigin: "bottom center" }}
-                >
-                  <span>{label}</span>
-                  {shortcut &&
-                    Array.from(shortcut).map((key, i) => (
-                      <kbd key={i} className="pap-tooltip__kbd">
-                        {key}
-                      </kbd>
-                    ))}
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>,
-          document.body,
-        )}
+      {mounted && (
+        <Tooltip tip={tipAnchor} setTip={setTipAnchor} instant={tipInstant}>
+          <span>{label}</span>
+          {shortcut &&
+            Array.from(shortcut).map((key, i) => (
+              <kbd key={i} className="pap-tooltip__kbd">
+                {key}
+              </kbd>
+            ))}
+        </Tooltip>
+      )}
     </div>
+  );
+}
+
+type TipAnchor = { top: number; left: number; below?: boolean };
+
+// Hover tooltip shared by the titlebar icons, the format buttons and the footer
+// "T": a portal to <body> so it escapes the shell's clipping. It is clamped into
+// the window after render, using its measured width.
+function Tooltip({
+  tip,
+  setTip,
+  instant,
+  children,
+}: {
+  tip: TipAnchor | null;
+  setTip: (tip: TipAnchor) => void;
+  instant: boolean;
+  children: React.ReactNode;
+}) {
+  const portalRef = useRef<HTMLDivElement>(null);
+  const reduce = !!useReducedMotion();
+
+  useLayoutEffect(() => {
+    if (!tip || !portalRef.current) return;
+    const halfWidth = portalRef.current.offsetWidth / 2;
+    const pad = 8;
+    const minLeft = pad + halfWidth;
+    const maxLeft = window.innerWidth - pad - halfWidth;
+    if (tip.left < minLeft - 0.5 || tip.left > maxLeft + 0.5) {
+      setTip({ ...tip, left: Math.max(minLeft, Math.min(tip.left, maxLeft)) });
+    }
+  }, [tip, setTip]);
+
+  const off = tip?.below ? -4 : 4;
+
+  return createPortal(
+    <AnimatePresence>
+      {tip && (
+        <div
+          ref={portalRef}
+          className={`pap-tooltip-portal${tip.below ? " pap-tooltip-portal--below" : ""}`}
+          style={{ top: tip.top, left: tip.left }}
+        >
+          <motion.div
+            className="pap-tooltip"
+            initial={instant ? false : { opacity: 0, ...(reduce ? {} : { y: off, scale: 0.97 }) }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{
+              opacity: 0,
+              ...(reduce ? {} : { y: off, scale: 0.97 }),
+              transition: { duration: instant ? 0 : 0.1 },
+            }}
+            transition={{ duration: instant ? 0 : 0.15, ease: HOVER_EASE }}
+            style={{ transformOrigin: tip.below ? "top center" : "bottom center" }}
+          >
+            {children}
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
+function FormatToggle({ label, onClick }: { label: string; onClick: () => void }) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const { anchor, setAnchor, instant, mounted, start, end } = useTooltip<TipAnchor>(() => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return { top: rect.top - 6, left: rect.left + rect.width / 2 };
+  });
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className="capture-hints__format"
+        aria-label={label}
+        onMouseEnter={start}
+        onMouseLeave={end}
+        onClick={() => {
+          end();
+          onClick();
+        }}
+      >
+        T
+      </button>
+      {mounted && (
+        <Tooltip tip={anchor} setTip={setAnchor} instant={instant}>
+          {label}
+        </Tooltip>
+      )}
+    </>
   );
 }
 
@@ -680,9 +726,8 @@ function FormatBar({ editor }: { editor: Editor }) {
 }
 
 // A format button that shows a hover tooltip naming what the glyph does (e.g.
-// "H2" → "Heading 2"), since the icons alone aren't obvious to everyone. Mirrors
-// the titlebar IconButton tooltip: portal to <body>, short delay, instant when
-// gliding across the bar, and flips below the button when there's no room above.
+// "H2" → "Heading 2"), since the icons alone aren't obvious to everyone. It
+// flips below the button when there's no room above.
 function FormatTipButton({
   label,
   active,
@@ -697,26 +742,12 @@ function FormatTipButton({
   children: React.ReactNode;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
-  const reduce = !!useReducedMotion();
-  const {
-    anchor: tip,
-    instant,
-    mounted,
-    start,
-    end,
-  } = useTooltip(() => {
+  const { anchor, setAnchor, instant, mounted, start, end } = useTooltip<TipAnchor>(() => {
     const rect = btnRef.current?.getBoundingClientRect();
     if (!rect) return null;
-    const pad = 8;
     const below = rect.top < 44; // not enough room above → drop below
-    const left = Math.max(
-      pad + 40,
-      Math.min(rect.left + rect.width / 2, window.innerWidth - pad - 40),
-    );
-    return { top: below ? rect.bottom + 6 : rect.top - 6, left, below };
+    return { top: below ? rect.bottom + 6 : rect.top - 6, left: rect.left + rect.width / 2, below };
   });
-
-  const off = tip?.below ? -4 : 4;
 
   return (
     <>
@@ -738,33 +769,11 @@ function FormatTipButton({
       >
         {children}
       </button>
-      {mounted &&
-        createPortal(
-          <AnimatePresence>
-            {tip && (
-              <div
-                className={`pap-tooltip-portal${tip.below ? " pap-tooltip-portal--below" : ""}`}
-                style={{ top: tip.top, left: tip.left }}
-              >
-                <motion.div
-                  className="pap-tooltip"
-                  initial={instant ? false : { opacity: 0, ...(reduce ? {} : { y: off, scale: 0.97 }) }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{
-                    opacity: 0,
-                    ...(reduce ? {} : { y: off, scale: 0.97 }),
-                    transition: { duration: instant ? 0 : 0.1 },
-                  }}
-                  transition={{ duration: instant ? 0 : 0.15, ease: HOVER_EASE }}
-                  style={{ transformOrigin: tip.below ? "top center" : "bottom center" }}
-                >
-                  {label}
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>,
-          document.body,
-        )}
+      {mounted && (
+        <Tooltip tip={anchor} setTip={setAnchor} instant={instant}>
+          {label}
+        </Tooltip>
+      )}
     </>
   );
 }

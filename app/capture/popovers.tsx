@@ -53,7 +53,7 @@ export function ShortcutsPopover({ instant }: { instant: boolean }) {
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const motionProps = usePopoverMotion(instant);
-  const onKeyDown = usePopoverKeyboard(containerRef, ".pap-popover__row");
+  const { onKeyDown, onMouseMove } = usePopoverKeyboard(containerRef, ".pap-popover__row");
 
   return (
     <motion.div
@@ -61,6 +61,7 @@ export function ShortcutsPopover({ instant }: { instant: boolean }) {
       className="pap-popover"
       role="menu"
       onKeyDown={onKeyDown}
+      onMouseMove={onMouseMove}
       {...motionProps}
     >
       {SHORTCUT_ROWS.map(([key, keys]) => (
@@ -84,7 +85,10 @@ export function SettingsPopover({ instant }: { instant: boolean }) {
   const { locale, setLocale } = useLocale();
   const containerRef = useRef<HTMLDivElement>(null);
   const motionProps = usePopoverMotion(instant);
-  const onKeyDown = usePopoverKeyboard(containerRef, ".pap-popover__row--button");
+  const { onKeyDown, onMouseMove } = usePopoverKeyboard(
+    containerRef,
+    ".pap-popover__row--button",
+  );
 
   return (
     <motion.div
@@ -92,6 +96,7 @@ export function SettingsPopover({ instant }: { instant: boolean }) {
       className="pap-popover"
       role="menu"
       onKeyDown={onKeyDown}
+      onMouseMove={onMouseMove}
       {...motionProps}
     >
       <div className="pap-popover__section">{t("settings.language")}</div>
@@ -128,9 +133,11 @@ export function NotesPopover({
   const t = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const motionProps = usePopoverMotion(instant);
-  const onArrowKey = usePopoverKeyboard(containerRef, ".pap-popover__pick", [
-    notes.length,
-  ]);
+  const { onKeyDown: onArrowKey, onMouseMove } = usePopoverKeyboard(
+    containerRef,
+    ".pap-popover__pick",
+    { focusDeps: [notes.length] },
+  );
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     onArrowKey(e);
@@ -150,6 +157,7 @@ export function NotesPopover({
       className="pap-popover"
       role="menu"
       onKeyDown={onKeyDown}
+      onMouseMove={onMouseMove}
       {...motionProps}
     >
       {notes.length === 0 ? (

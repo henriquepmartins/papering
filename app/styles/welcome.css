@@ -91,10 +91,16 @@
     background: var(--color-accent);
     border-radius: 9px;
     cursor: default;
-    transition: filter 120ms ease;
+    transition: filter 120ms ease, transform 160ms var(--ease-out);
   }
 
   .pap-welcome__dismiss:hover {
     filter: brightness(1.05);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pap-welcome__dismiss:active {
+      transform: scale(0.96);
+    }
   }
 }

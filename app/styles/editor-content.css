@@ -61,6 +61,8 @@
     height: auto;
     border-radius: 6px;
     margin: 0.5em 0;
+    outline: 1px solid rgba(0, 0, 0, 0.1);
+    outline-offset: -1px;
   }
   .editor-host .tiptap img.ProseMirror-selectednode {
     outline: 2px solid var(--color-caret);
@@ -210,6 +212,7 @@
     font-size: 13px;
     line-height: 1.5;
     overflow-x: auto;
+    overscroll-behavior: contain;
     white-space: pre;
   }
   .editor-host .tiptap pre code {

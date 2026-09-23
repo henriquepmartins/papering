@@ -60,6 +60,7 @@ export default function ContextMenu({
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<ContextAnchor>(anchor);
+  const [origin, setOrigin] = useState("0px 0px");
   const reduce = !!useReducedMotion();
 
   const hasSelection = !!editor && !editor.state.selection.empty;
@@ -110,19 +111,24 @@ export default function ContextMenu({
     }
   }
 
-  // Clamp into the viewport after the menu is measured.
+  // Clamp into the viewport after the menu is measured. offsetWidth/Height
+  // ignore the enter scale, which getBoundingClientRect would include. The
+  // transform origin stays on the cursor, wherever the clamp moved the menu.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const rect = el.getBoundingClientRect();
     const pad = 8;
-    const left = Math.min(anchor.x, window.innerWidth - rect.width - pad);
-    const top = Math.min(anchor.y, window.innerHeight - rect.height - pad);
-    setPos({ x: Math.max(pad, left), y: Math.max(pad, top) });
+    const left = Math.max(pad, Math.min(anchor.x, window.innerWidth - el.offsetWidth - pad));
+    const top = Math.max(pad, Math.min(anchor.y, window.innerHeight - el.offsetHeight - pad));
+    setPos({ x: left, y: top });
+    setOrigin(`${anchor.x - left}px ${anchor.y - top}px`);
   }, [anchor]);
 
-  // Focus the first item on mount; wrap focus with arrow keys.
-  const onKeyDown = usePopoverKeyboard(ref, ".pap-context__item");
+  // The menu opens with no row highlighted, like a native context menu; the
+  // first arrow press lands on the first row.
+  const { onKeyDown, onMouseMove } = usePopoverKeyboard(ref, ".pap-context__item", {
+    autoFocus: "container",
+  });
 
   // Escape / click-outside close.
   useEffect(() => {
@@ -152,8 +158,10 @@ export default function ContextMenu({
         ref={ref}
         className="pap-popover pap-context"
         role="menu"
-        style={{ position: "fixed", top: pos.y, left: pos.x }}
+        tabIndex={-1}
+        style={{ position: "fixed", top: pos.y, left: pos.x, transformOrigin: origin }}
         onKeyDown={onKeyDown}
+        onMouseMove={onMouseMove}
         initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: -2 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.08 } }}
