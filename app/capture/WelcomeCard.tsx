@@ -38,7 +38,7 @@ export default function WelcomeCard({ onDismiss }: { onDismiss: () => void }) {
       className="pap-welcome-overlay"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      exit={{ opacity: 0, transition: { duration: 0.14, ease: HOVER_EASE } }}
       transition={{ duration: 0.18, ease: HOVER_EASE }}
     >
       <motion.div
@@ -47,7 +47,11 @@ export default function WelcomeCard({ onDismiss }: { onDismiss: () => void }) {
         aria-modal="true"
         initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 6 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 6 }}
+        exit={{
+          opacity: 0,
+          ...(reduce ? {} : { scale: 0.96, y: 6 }),
+          transition: { duration: 0.14, ease: HOVER_EASE },
+        }}
         transition={{ duration: 0.22, ease: HOVER_EASE }}
       >
         <h1 className="pap-welcome__title">{t("welcome.title")}</h1>

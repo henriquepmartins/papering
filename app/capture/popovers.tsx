@@ -22,16 +22,24 @@ function formatRelative(unixSeconds: number): string {
 }
 
 // Motion props for the title-bar popovers. `instant` (keyboard-triggered) skips
-// the enter animation entirely; Reduce Motion keeps the opacity fade but drops
-// the position/scale movement. Origin is the top-right trigger icons, so it
-// scales out from the button rather than from its own center.
+// the enter animation; a keyboard close skips the exit too, read from the
+// parent AnimatePresence's `custom` since the popover has unmounted by then.
+// Reduce Motion keeps the opacity fade but drops the position/scale movement.
+// Origin is the top-right trigger icons, so it scales out from the button
+// rather than from its own center.
 function usePopoverMotion(instant: boolean) {
   const reduce = !!useReducedMotion();
   const offset = reduce ? {} : { y: -4, scale: 0.97 };
   return {
     initial: instant ? false : { opacity: 0, ...offset },
     animate: { opacity: 1, y: 0, scale: 1 },
-    exit: { opacity: 0, ...offset, transition: { duration: instant ? 0.08 : 0.1 } },
+    exit: "exit",
+    variants: {
+      exit: (instantExit: boolean) =>
+        instantExit
+          ? { opacity: 0, transition: { duration: 0 } }
+          : { opacity: 0, ...offset, transition: { duration: 0.1 } },
+    },
     transition: { duration: instant ? 0 : 0.16, ease: HOVER_EASE },
     style: { transformOrigin: "top right" as const },
   };
@@ -181,6 +189,7 @@ function NoteRow({
   onDelete: (path: string) => void;
 }) {
   const t = useT();
+  const reduce = !!useReducedMotion();
   // Two-step delete: the first click arms the confirm state, which auto-disarms
   // after 2.5s. The timer is tracked so it's cleared on unmount (the row often
   // disappears mid-countdown after a delete) and re-armed cleanly.
@@ -220,7 +229,7 @@ function NoteRow({
         aria-label={confirm ? t("notes.confirmDelete") : t("notes.delete")}
         className={`pap-popover__delete${confirm ? " is-confirm" : ""}`}
         onClick={onDeleteClick}
-        whileTap={{ scale: 0.93 }}
+        whileTap={reduce ? undefined : { scale: 0.96 }}
         transition={{ duration: 0.12, ease: HOVER_EASE }}
       >
         <TrashIcon />

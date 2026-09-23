@@ -116,11 +116,11 @@ export default function CaptureEditor() {
   const [ctxMenu, setCtxMenu] = useState<ContextAnchor | null>(null);
   const [formatOpen, setFormatOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
-  // Whether the open popover should appear instantly (no enter animation).
-  // True when opened via keyboard (⌘K/⌘O) — frequent keyboard actions should
-  // never animate (Raycast's launcher has no open animation) — or under
-  // Reduce Motion. Mouse-opened popovers keep the subtle scale/slide.
+  // Whether the last open or close of a title-bar popover came from the
+  // keyboard. Keyboard actions never animate (Raycast's launcher has no open
+  // or close animation); mouse-driven ones keep the subtle scale/slide.
   const [popoverInstant, setPopoverInstant] = useState(false);
+  const [formatInstant, setFormatInstant] = useState(false);
   const [notes, setNotes] = useState<NoteMeta[]>([]);
 
   const flushSave = useCallback(async () => {
@@ -186,6 +186,7 @@ export default function CaptureEditor() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
+        setPopoverInstant(true);
         setPopover(null);
         editor?.commands.focus();
       }
@@ -193,6 +194,7 @@ export default function CaptureEditor() {
     const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (target?.closest(".pap-popover") || target?.closest(".capture-titlebar__icons")) return;
+      setPopoverInstant(false);
       setPopover(null);
     };
     document.addEventListener("keydown", onKey, true);
@@ -235,11 +237,11 @@ export default function CaptureEditor() {
   }, []);
 
   const openNotes = async (instant = false) => {
+    setPopoverInstant(instant);
     if (popover === "notes") {
       setPopover(null);
       return;
     }
-    setPopoverInstant(instant);
     await refreshNotes();
     setPopover("notes");
   };
@@ -442,7 +444,7 @@ export default function CaptureEditor() {
               <GearIcon />
             </IconButton>
           </div>
-          <AnimatePresence>
+          <AnimatePresence custom={popoverInstant}>
             {popover === "shortcuts" && (
               <ShortcutsPopover key="shortcuts" instant={popoverInstant} />
             )}
@@ -480,13 +482,20 @@ export default function CaptureEditor() {
               onClick={() => {
                 setPopover(null);
                 setCtxMenu(null);
+                setFormatInstant(false);
                 setFormatOpen((v) => !v);
                 editor?.commands.focus();
               }}
             />
-            <AnimatePresence>
+            <AnimatePresence custom={formatInstant}>
               {formatOpen && editor && (
-                <FormatPopover editor={editor} onClose={() => setFormatOpen(false)} />
+                <FormatPopover
+                  editor={editor}
+                  onClose={(viaKeyboard) => {
+                    setFormatInstant(viaKeyboard);
+                    setFormatOpen(false);
+                  }}
+                />
               )}
             </AnimatePresence>
           </div>
@@ -551,7 +560,7 @@ function IconButton({
         className="capture-titlebar__icon"
         initial={{ backgroundColor: TRANSPARENT }}
         whileHover={{ backgroundColor: HOVER_BG }}
-        whileTap={reduce ? undefined : { scale: 0.94 }}
+        whileTap={reduce ? undefined : { scale: 0.96 }}
         transition={{ duration: 0.08, ease: HOVER_EASE }}
       >
         {children}
@@ -784,7 +793,7 @@ function FormatPopover({
   onClose,
 }: {
   editor: Editor;
-  onClose: () => void;
+  onClose: (viaKeyboard: boolean) => void;
 }) {
   const reduce = !!useReducedMotion();
 
@@ -794,13 +803,13 @@ function FormatPopover({
       if (target?.closest(".pap-format-pop") || target?.closest(".capture-hints__format")) {
         return;
       }
-      onClose();
+      onClose(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.preventDefault();
       e.stopPropagation();
-      onClose();
+      onClose(true);
     };
     document.addEventListener("mousedown", onDown, true);
     document.addEventListener("keydown", onKey, true);
@@ -815,7 +824,13 @@ function FormatPopover({
       className="pap-format-pop"
       initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 4, scale: 0.97, transition: { duration: 0.1 } }}
+      exit="exit"
+      variants={{
+        exit: (instant: boolean) =>
+          instant
+            ? { opacity: 0, transition: { duration: 0 } }
+            : { opacity: 0, ...(reduce ? {} : { y: 4, scale: 0.97 }), transition: { duration: 0.1 } },
+      }}
       transition={{ duration: 0.15, ease: HOVER_EASE }}
       style={{ transformOrigin: "bottom right" }}
     >
