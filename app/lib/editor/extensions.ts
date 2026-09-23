@@ -1,4 +1,5 @@
 import {
+  Extension,
   type JSONContent,
   type MarkdownParseHelpers,
   type MarkdownRendererHelpers,
@@ -8,11 +9,14 @@ import { Heading } from "@tiptap/extension-heading";
 import { Highlight } from "@tiptap/extension-highlight";
 import { Link } from "@tiptap/extension-link";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
+import { Paragraph } from "@tiptap/extension-paragraph";
 import { Strike } from "@tiptap/extension-strike";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { Typography } from "@tiptap/extension-typography";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
+import { Fragment, Slice } from "@tiptap/pm/model";
+import { Plugin } from "@tiptap/pm/state";
 import { StarterKit } from "@tiptap/starter-kit";
 
 import { getCurrentLocale } from "../i18n";
@@ -104,6 +108,81 @@ const MarkdownHighlight = Highlight.configure({ multicolor: false }).extend({
     `==${helpers.renderChildren(node.content ?? [])}==`,
 });
 
+// A paragraph whose text starts with `1. ` would reload as an ordered list, so
+// the marker's dot is escaped on save. `EscapeToken` reads it back.
+const renderParagraph = Paragraph.config.renderMarkdown;
+const MarkdownParagraph = Paragraph.extend({
+  renderMarkdown: (node, helpers, ctx) =>
+    (renderParagraph?.(node, helpers, ctx) ?? "").replace(/^(\d+)\.(?=\s)/, "$1\\."),
+});
+
+// @tiptap/markdown has no handler for marked's `escape` token, so `1\. a`
+// loaded as "1 a". Map it back to its literal character.
+const EscapeToken = Extension.create({
+  name: "markdownEscape",
+  markdownTokenName: "escape",
+  parseMarkdown: (token: MarkdownToken) => ({ type: "text", text: token.text ?? "" }),
+});
+
+// Markdown joins consecutive lines into one paragraph, but a pasted line break
+// should stay a line break, as it does when typed. Split paragraphs at "\n".
+function splitSoftBreaks(nodes: JSONContent[]): JSONContent[] {
+  return nodes.flatMap((node) => {
+    if (node.type !== "paragraph") {
+      return node.content ? [{ ...node, content: splitSoftBreaks(node.content) }] : [node];
+    }
+    const lines: JSONContent[][] = [[]];
+    for (const child of node.content ?? []) {
+      const parts = child.type === "text" ? (child.text ?? "").split("\n") : [null];
+      parts.forEach((part, i) => {
+        if (i > 0) lines.push([]);
+        if (part === null) lines[lines.length - 1].push(child);
+        else if (part) lines[lines.length - 1].push({ ...child, text: part });
+      });
+    }
+    return lines.map((content) => ({ ...node, content }));
+  });
+}
+
+// ProseMirror inserts plain-text paste verbatim, so pasted markdown (`1. foo`,
+// `- [ ] task`) never became structure. Parse it as markdown instead, except
+// inside code blocks and when the clipboard carries HTML or files.
+const MarkdownPaste = Extension.create({
+  name: "markdownPaste",
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+    return [
+      new Plugin({
+        props: {
+          handlePaste: (view, event) => {
+            const data = event.clipboardData;
+            if (!data || data.files.length > 0 || data.getData("text/html")) return false;
+            const text = data.getData("text/plain");
+            if (!text || !editor.markdown) return false;
+            if (view.state.selection.$from.parent.type.spec.code) return false;
+            const blocks = splitSoftBreaks(editor.markdown.parse(text).content ?? []);
+            // The uiEvent meta keeps paste rules (link detection) running.
+            if (blocks.some((b) => b.type !== "paragraph")) {
+              return editor
+                .chain()
+                .command(({ tr }) => !!tr.setMeta("uiEvent", "paste"))
+                .insertContent(blocks)
+                .run();
+            }
+            // Plain lines paste as an open slice, like ProseMirror's own text
+            // paste, so the first and last lines merge into the current one.
+            const { schema, tr } = view.state;
+            const nodes = blocks.map((b) => schema.nodeFromJSON(b));
+            tr.replaceSelection(Slice.maxOpen(Fragment.fromArray(nodes)));
+            view.dispatch(tr.setMeta("uiEvent", "paste").scrollIntoView());
+            return true;
+          },
+        },
+      }),
+    ];
+  },
+});
+
 // Auto-detected links with markdown round-trip. `autolink` linkifies bare
 // domains (e.g. `motion.dev`) as you type; `defaultProtocol` makes their href
 // `https://`. `openOnClick: false` keeps clicks from navigating the webview
@@ -153,9 +232,11 @@ const MinimalTypography = Typography.configure({
 export const editorExtensions = [
   StarterKit.configure({
     heading: false,
+    paragraph: false,
     strike: false,
     link: false,
   }),
+  MarkdownParagraph,
   CustomHeading.configure({ levels: [1, 2, 3] }),
   CustomStrike,
   TaskList,
@@ -173,6 +254,8 @@ export const editorExtensions = [
   MarkdownHighlight,
   MarkdownLink,
   MarkdownImage,
+  EscapeToken,
+  MarkdownPaste,
   // Tables (GFM). v3's @tiptap/extension-table ships parseMarkdown/renderMarkdown,
   // so they round-trip through @tiptap/markdown with no custom spec.
   Table,
