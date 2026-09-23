@@ -74,6 +74,30 @@ import {
 
 const SAVE_DEBOUNCE_MS = 400;
 
+const FONT_SIZE_KEY = "pap.fontSize";
+const DEFAULT_FONT_SIZE = 15;
+const MIN_FONT_SIZE = 11;
+const MAX_FONT_SIZE = 24;
+
+type CountMode = "characters" | "words";
+const COUNT_MODE_KEY = "pap.countMode";
+
+function readStored(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage unavailable: the choice just won't survive a relaunch.
+  }
+}
+
 function stripMarkdownInline(line: string): string {
   return line
     .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
@@ -110,7 +134,8 @@ export default function CaptureEditor() {
   const currentPathRef = useRef<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [charCount, setCharCount] = useState(0);
+  const [fontSize, setFontSize] = useState(DEFAULT_FONT_SIZE);
+  const [countMode, setCountMode] = useState<CountMode>("characters");
   const [title, setTitle] = useState(() => t("note.new"));
   const [popover, setPopover] = useState<Popover>(null);
   const [ctxMenu, setCtxMenu] = useState<ContextAnchor | null>(null);
@@ -140,7 +165,6 @@ export default function CaptureEditor() {
     onChange: (doc) => {
       docRef.current = doc;
       dirtyRef.current = true;
-      setCharCount(doc.length);
       setTitle(deriveTitle(doc, t("note.new")));
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => void flushSave(), SAVE_DEBOUNCE_MS);
@@ -152,6 +176,39 @@ export default function CaptureEditor() {
       });
     },
   });
+
+  // Counts what the reader sees, not the markdown source (`**` and friends).
+  const text =
+    useEditorState({
+      editor,
+      selector: ({ editor: ed }) => ed?.getText({ blockSeparator: "\n" }) ?? "",
+    }) ?? "";
+  const count =
+    countMode === "words"
+      ? text.split(/\s+/).filter(Boolean).length
+      : Array.from(text).length;
+
+  useEffect(() => {
+    const size = Number(readStored(FONT_SIZE_KEY));
+    if (size >= MIN_FONT_SIZE && size <= MAX_FONT_SIZE) setFontSize(size);
+    if (readStored(COUNT_MODE_KEY) === "words") setCountMode("words");
+  }, []);
+
+  const zoom = (next: (size: number) => number) => {
+    setFontSize((size) => {
+      const clamped = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, next(size)));
+      writeStored(FONT_SIZE_KEY, String(clamped));
+      return clamped;
+    });
+  };
+
+  const toggleCountMode = () => {
+    setCountMode((mode) => {
+      const next = mode === "words" ? "characters" : "words";
+      writeStored(COUNT_MODE_KEY, next);
+      return next;
+    });
+  };
 
   // Check for app updates once on startup (no-op outside Tauri).
   useEffect(() => {
@@ -224,6 +281,7 @@ export default function CaptureEditor() {
     focusEditor: () => {},
     openSettings: () => {},
     openShortcuts: () => {},
+    zoom: (_next: (size: number) => number) => {},
   });
 
   const refreshNotes = useCallback(async () => {
@@ -242,8 +300,9 @@ export default function CaptureEditor() {
       setPopover(null);
       return;
     }
-    await refreshNotes();
+    // Open on the cached list at once; the fresh one swaps in when it lands.
     setPopover("notes");
+    await refreshNotes();
   };
 
   const handleNew = async () => {
@@ -254,7 +313,6 @@ export default function CaptureEditor() {
     docRef.current = "";
     dirtyRef.current = false;
     currentPathRef.current = null;
-    setCharCount(0);
     setTitle(t("note.new"));
     setPopover(null);
     editor.commands.focus();
@@ -273,7 +331,6 @@ export default function CaptureEditor() {
       docRef.current = content;
       dirtyRef.current = false;
       currentPathRef.current = path;
-      setCharCount(content.length);
       setTitle(deriveTitle(content, t("note.new")));
       setPopover(null);
       editor.commands.focus();
@@ -302,6 +359,7 @@ export default function CaptureEditor() {
   actionsRef.current.focusEditor = () => editor?.commands.focus();
   actionsRef.current.openSettings = openSettings;
   actionsRef.current.openShortcuts = openShortcuts;
+  actionsRef.current.zoom = zoom;
 
   // Backend → frontend: global hotkey (⌃⌥N) — resume most recent note or start fresh.
   useEffect(() => {
@@ -360,10 +418,20 @@ export default function CaptureEditor() {
     editor?.commands.focus();
   }, [editor]);
 
-  // Global shortcuts: ⌘K (shortcuts panel), ⌘O (notes list), ⌘N (new note).
+  // Global shortcuts: ⌘K (shortcuts panel), ⌘P or ⌘O (notes list), ⌘N (new
+  // note), ⌘, (settings), ⌘+ / ⌘- / ⌘0 (text size).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.altKey) return;
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      // ⌘+ arrives with Shift held on most layouts, so zoom is matched first.
+      const zoomStep = { "=": 1, "+": 1, "-": -1 }[e.key];
+      if (zoomStep || e.key === "0") {
+        e.preventDefault();
+        e.stopPropagation();
+        actionsRef.current.zoom((size) => (zoomStep ? size + zoomStep : DEFAULT_FONT_SIZE));
+        return;
+      }
+      if (e.shiftKey) return;
       const key = e.key.toLowerCase();
       if (key === "k") {
         e.preventDefault();
@@ -374,7 +442,7 @@ export default function CaptureEditor() {
           if (next === null) actionsRef.current.focusEditor();
           return next;
         });
-      } else if (key === "o") {
+      } else if (key === "p" || key === "o") {
         e.preventDefault();
         e.stopPropagation();
         void actionsRef.current.openNotes(true); // keyboard → instant
@@ -407,7 +475,6 @@ export default function CaptureEditor() {
         docRef.current = "";
         dirtyRef.current = false;
         currentPathRef.current = null;
-        setCharCount(0);
         setTitle(t("note.new"));
       }
       await refreshNotes();
@@ -434,7 +501,7 @@ export default function CaptureEditor() {
             <IconButton label={t("btn.shortcuts")} shortcut="⌘K" onClick={openShortcuts}>
               <span className="cmd-glyph">⌘</span>
             </IconButton>
-            <IconButton label={t("btn.notes")} shortcut="⌘O" onClick={openNotes}>
+            <IconButton label={t("btn.notes")} shortcut="⌘P" onClick={openNotes}>
               <NotesIcon />
             </IconButton>
             <IconButton label={t("btn.newNote")} shortcut="⌘N" onClick={handleNew}>
@@ -462,7 +529,11 @@ export default function CaptureEditor() {
             )}
           </AnimatePresence>
         </header>
-        <EditorContent editor={editor} className="editor-host" />
+        <EditorContent
+          editor={editor}
+          className="editor-host"
+          style={{ "--editor-font-size": `${fontSize}px` } as React.CSSProperties}
+        />
         {editor && (
           <BubbleMenu
             editor={editor}
@@ -473,9 +544,9 @@ export default function CaptureEditor() {
           </BubbleMenu>
         )}
         <footer className="capture-hints">
-          <span className="capture-hints__count" aria-hidden="true">
-            {t("hints.characters", { n: charCount })}
-          </span>
+          <button type="button" className="capture-hints__count" onClick={toggleCountMode}>
+            {t(countMode === "words" ? "hints.words" : "hints.characters", { n: count })}
+          </button>
           <div className="capture-hints__format-wrap">
             <FormatToggle
               label={t("btn.formatting")}

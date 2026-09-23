@@ -14,7 +14,6 @@
         "@tiptap/extension-image": "^3.23.6",
         "@tiptap/extension-list": "^3.23.6",
         "@tiptap/extension-paragraph": "^3.23.6",
-        "@tiptap/extension-strike": "^3.23.6",
         "@tiptap/extension-table": "3.23.6",
         "@tiptap/extension-typography": "3.23.6",
         "@tiptap/extensions": "^3.23.6",

@@ -9,7 +9,7 @@ const HOVER_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
 
 const TIPS: { badge: string; key: MessageKey }[] = [
   { badge: "⌘N", key: "welcome.tip.new" },
-  { badge: "⌘O", key: "welcome.tip.notes" },
+  { badge: "⌘P", key: "welcome.tip.notes" },
   { badge: "⌘K", key: "welcome.tip.shortcuts" },
   { badge: "⌘,", key: "welcome.tip.settings" },
   { badge: "/", key: "welcome.tip.slash" },

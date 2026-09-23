@@ -144,9 +144,9 @@ export const MARK_COMMANDS: EditorCommand[] = [
   chainCommand({ id: "bold", context: { label: "ctx.bold", shortcut: "⌘B" } }, (c) => c.toggleBold()),
   chainCommand({ id: "italic", context: { label: "ctx.italic", shortcut: "⌘I" } }, (c) => c.toggleItalic()),
   chainCommand({ id: "code", context: { label: "ctx.code", shortcut: "⌘E" } }, (c) => c.toggleCode()),
-  chainCommand({ id: "strike", context: { label: "ctx.strike", shortcut: "⌘⇧X" } }, (c) => c.toggleStrike()),
+  chainCommand({ id: "strike", context: { label: "ctx.strike", shortcut: "⇧⌘S" } }, (c) => c.toggleStrike()),
   chainCommand({ id: "highlight", context: { label: "ctx.highlight" } }, (c) => c.toggleHighlight()),
-  { id: "link", context: { label: "ctx.link" }, run: (editor) => toggleLink(editor) },
+  { id: "link", context: { label: "ctx.link", shortcut: "⌘L" }, run: (editor) => toggleLink(editor) },
   { id: "clearFormat", context: { label: "ctx.clearFormat" }, run: (editor) => clearFormatting(editor) },
 ];
 

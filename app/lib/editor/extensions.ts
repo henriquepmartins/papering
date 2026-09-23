@@ -10,7 +10,6 @@ import { Highlight } from "@tiptap/extension-highlight";
 import { Link } from "@tiptap/extension-link";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Paragraph } from "@tiptap/extension-paragraph";
-import { Strike } from "@tiptap/extension-strike";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { Typography } from "@tiptap/extension-typography";
 import { Placeholder } from "@tiptap/extensions";
@@ -21,6 +20,7 @@ import { StarterKit } from "@tiptap/starter-kit";
 
 import { getCurrentLocale } from "../i18n";
 import { translate } from "../i18n/messages";
+import { toggleLink } from "./commands";
 import { SlashCommand } from "./slashCommand";
 import { MarkdownImage } from "./extensions/markdown-image";
 
@@ -29,8 +29,9 @@ export { setAttachmentsBase } from "./extensions/markdown-image";
 // Custom editor keymaps kept in one place so they're discoverable (and could
 // drive a future "shortcuts" display).
 const KEYMAPS = {
-  strike: "Mod-Shift-x",
   highlight: "Mod-Shift-h",
+  toggleTask: "Mod-Enter",
+  link: "Mod-l",
 } as const;
 
 // Extension stack for the Papering capture editor.
@@ -40,9 +41,9 @@ const KEYMAPS = {
 // Blockquote, HardBreak, HorizontalRule, History, Dropcursor, Gapcursor,
 // Link, ListKeymap, Underline, TrailingNode.
 //
-// Strike and Heading are disabled here and re-imported standalone so we can
-// override their keymaps (Strike: ⌘⇧X like the old CodeMirror editor;
-// Heading: Backspace at parentOffset 0 → setParagraph, Notion-style revert).
+// Heading is disabled here and re-imported standalone so we can override its
+// keymap (Backspace at parentOffset 0 → setParagraph, Notion-style revert).
+// Strike keeps StarterKit's ⇧⌘S, which is also Raycast Notes' shortcut.
 //
 // Input rules (`# `, `## `, `### `, `- `, `1. `, `> `, ```` ``` ````, `**`,
 // `*`, `~~`, `` ` ``) are built into StarterKit and **consume** the
@@ -52,14 +53,6 @@ const KEYMAPS = {
 // (marked-based). Content loads via `setContent(md, { contentType: "markdown" })`
 // and serializes via `editor.getMarkdown()`. `==text==` highlight is non-standard
 // markdown, so we register a custom tokenizer + parse/render spec on Highlight.
-
-const CustomStrike = Strike.extend({
-  addKeyboardShortcuts() {
-    return {
-      [KEYMAPS.strike]: () => this.editor.commands.toggleStrike(),
-    };
-  },
-});
 
 const CustomHeading = Heading.extend({
   addKeyboardShortcuts() {
@@ -183,6 +176,34 @@ const MarkdownPaste = Extension.create({
   },
 });
 
+// Raycast Notes shortcuts. The high priority puts ⌘Enter ahead of HardBreak,
+// which also binds it; outside a task item it falls through to a line break.
+const NoteShortcuts = Extension.create({
+  name: "noteShortcuts",
+  priority: 1000,
+  addKeyboardShortcuts() {
+    return {
+      [KEYMAPS.toggleTask]: ({ editor }) => {
+        const { $from } = editor.state.selection;
+        for (let depth = $from.depth; depth > 0; depth--) {
+          const node = $from.node(depth);
+          if (node.type.name !== "taskItem") continue;
+          const pos = $from.before(depth);
+          return editor.commands.command(({ tr }) => {
+            tr.setNodeAttribute(pos, "checked", !node.attrs.checked);
+            return true;
+          });
+        }
+        return false;
+      },
+      [KEYMAPS.link]: ({ editor }) => {
+        toggleLink(editor);
+        return true;
+      },
+    };
+  },
+});
+
 // Auto-detected links with markdown round-trip. `autolink` linkifies bare
 // domains (e.g. `motion.dev`) as you type; `defaultProtocol` makes their href
 // `https://`. `openOnClick: false` keeps clicks from navigating the webview
@@ -233,12 +254,10 @@ export const editorExtensions = [
   StarterKit.configure({
     heading: false,
     paragraph: false,
-    strike: false,
     link: false,
   }),
   MarkdownParagraph,
   CustomHeading.configure({ levels: [1, 2, 3] }),
-  CustomStrike,
   TaskList,
   TaskItem.configure({ nested: true }),
   // Placeholder text is resolved per-render from the active locale, so it
@@ -256,6 +275,7 @@ export const editorExtensions = [
   MarkdownImage,
   EscapeToken,
   MarkdownPaste,
+  NoteShortcuts,
   // Tables (GFM). v3's @tiptap/extension-table ships parseMarkdown/renderMarkdown,
   // so they round-trip through @tiptap/markdown with no custom spec.
   Table,

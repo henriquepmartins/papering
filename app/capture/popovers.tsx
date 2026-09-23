@@ -48,13 +48,16 @@ function usePopoverMotion(instant: boolean) {
 const SHORTCUT_ROWS: Array<[MessageKey, string]> = [
   ["sc.capture", "⌃⌥N"],
   ["sc.newNote", "⌘N"],
-  ["sc.openNotes", "⌘O"],
+  ["sc.openNotes", "⌘P"],
   ["sc.settings", "⌘,"],
   ["sc.saveClose", "Esc"],
   ["sc.bold", "⌘B"],
   ["sc.italic", "⌘I"],
   ["sc.code", "⌘E"],
-  ["sc.strike", "⌘⇧X"],
+  ["sc.strike", "⇧⌘S"],
+  ["sc.link", "⌘L"],
+  ["sc.toggleTask", "⌘↩"],
+  ["sc.zoom", "⌘+ ⌘-"],
 ];
 
 export function ShortcutsPopover({ instant }: { instant: boolean }) {

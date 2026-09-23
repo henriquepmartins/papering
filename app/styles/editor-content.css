@@ -4,6 +4,9 @@
      .ProseMirror contenteditable. We keep all editor typography under
      .editor-host .tiptap so the rules don't leak elsewhere. */
   .editor-host {
+    /* Zoomed with ⌘+ / ⌘- (inline override from CaptureEditor). Sizes below are
+       written as ratios of it so 15px reproduces the original px values. */
+    --editor-font-size: 15px;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -17,7 +20,7 @@
     padding: 8px 24px 24px;
     color: var(--color-text);
     font-family: var(--font-sans);
-    font-size: 15px;
+    font-size: var(--editor-font-size);
     line-height: 1.55;
     caret-color: var(--color-caret);
     outline: none;
@@ -29,21 +32,21 @@
 
   /* Headings */
   .editor-host .tiptap h1 {
-    font-size: 22px;
+    font-size: calc(var(--editor-font-size) * 22 / 15);
     font-weight: 700;
     letter-spacing: -0.012em;
     line-height: 1.25;
     margin: 0.4em 0 0.1em;
   }
   .editor-host .tiptap h2 {
-    font-size: 18px;
+    font-size: calc(var(--editor-font-size) * 18 / 15);
     font-weight: 700;
     letter-spacing: -0.006em;
     line-height: 1.3;
     margin: 0.4em 0 0.1em;
   }
   .editor-host .tiptap h3 {
-    font-size: 16px;
+    font-size: calc(var(--editor-font-size) * 16 / 15);
     font-weight: 600;
     line-height: 1.35;
     margin: 0.4em 0 0.1em;
@@ -107,7 +110,7 @@
   }
   .editor-host .tiptap code {
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: calc(var(--editor-font-size) * 13 / 15);
     padding: 1px 5px;
     border-radius: 4px;
     background: oklch(0 0 0 / 0.05);
@@ -209,7 +212,7 @@
     border-radius: 6px;
     background: oklch(0 0 0 / 0.04);
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: calc(var(--editor-font-size) * 13 / 15);
     line-height: 1.5;
     overflow-x: auto;
     overscroll-behavior: contain;
@@ -235,7 +238,7 @@
     border-collapse: collapse;
     width: 100%;
     margin: 8px 0;
-    font-size: 14px;
+    font-size: calc(var(--editor-font-size) * 14 / 15);
     table-layout: fixed;
     overflow: hidden;
   }

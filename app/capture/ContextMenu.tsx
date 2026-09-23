@@ -104,7 +104,7 @@ export default function ContextMenu({
         ...BLOCK_COMMANDS.filter((c) => c.context).map((c) => cmdRow(c.id)),
         { kind: "separator" },
         { kind: "item", label: t("ctx.newNote"), shortcut: "⌘N", run: act(onNewNote) },
-        { kind: "item", label: t("ctx.openNotes"), shortcut: "⌘O", run: act(onOpenNotes) },
+        { kind: "item", label: t("ctx.openNotes"), shortcut: "⌘P", run: act(onOpenNotes) },
         { kind: "item", label: t("ctx.settings"), shortcut: "⌘,", run: act(onSettings) },
         { kind: "item", label: t("ctx.shortcuts"), shortcut: "⌘K", run: act(onShortcuts) },
       );

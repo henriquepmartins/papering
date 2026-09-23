@@ -17,6 +17,7 @@ export const pt = {
   "note.untitled": "Sem título",
   "editor.placeholder": "Comece a escrever…",
   "hints.characters": "{n} caracteres",
+  "hints.words": "{n} palavras",
 
   // Titlebar buttons
   "btn.shortcuts": "Atalhos",
@@ -37,6 +38,9 @@ export const pt = {
   "sc.italic": "Itálico",
   "sc.code": "Código",
   "sc.strike": "Tachado",
+  "sc.link": "Link",
+  "sc.toggleTask": "Marcar tarefa",
+  "sc.zoom": "Aumentar ou reduzir texto",
   "sc.newNote": "Nova nota",
   "sc.openNotes": "Abrir notas",
   "sc.settings": "Ajustes",
@@ -112,6 +116,7 @@ export const en: Messages = {
   "note.untitled": "Untitled",
   "editor.placeholder": "Start writing…",
   "hints.characters": "{n} characters",
+  "hints.words": "{n} words",
 
   "btn.shortcuts": "Shortcuts",
   "btn.notes": "Notes",
@@ -129,6 +134,9 @@ export const en: Messages = {
   "sc.italic": "Italic",
   "sc.code": "Inline code",
   "sc.strike": "Strikethrough",
+  "sc.link": "Link",
+  "sc.toggleTask": "Toggle task",
+  "sc.zoom": "Zoom text",
   "sc.newNote": "New note",
   "sc.openNotes": "Open notes",
   "sc.settings": "Settings",

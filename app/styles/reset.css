@@ -47,6 +47,7 @@
 
   /* Keyboard focus ring for chrome buttons that have no row highlight. */
   .capture-titlebar__icons button:focus-visible,
+  .capture-hints__count:focus-visible,
   .capture-hints__format:focus-visible,
   .pap-popover__delete:focus-visible,
   .pap-welcome__dismiss:focus-visible {
