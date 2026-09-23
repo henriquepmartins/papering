@@ -2,14 +2,13 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import type { Editor } from "@tiptap/react";
 
 import { useT } from "../lib/i18n";
 import { BLOCK_COMMANDS, commandById } from "../lib/editor/commands";
 import { usePopoverKeyboard } from "./usePopoverKeyboard";
-
-const HOVER_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
+import { HOVER_EASE } from "./ui-motion";
 
 export type ContextAnchor = { x: number; y: number };
 
@@ -153,40 +152,37 @@ export default function ContextMenu({
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <AnimatePresence>
-      <motion.div
-        ref={ref}
-        className="pap-popover pap-context"
-        role="menu"
-        tabIndex={-1}
-        style={{ position: "fixed", top: pos.y, left: pos.x, transformOrigin: origin }}
-        onKeyDown={onKeyDown}
-        onMouseMove={onMouseMove}
-        initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: -2 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.08 } }}
-        transition={{ duration: 0.13, ease: HOVER_EASE }}
-      >
-        {rows.map((row, i) =>
-          row.kind === "separator" ? (
-            <div key={`sep-${i}`} className="pap-context__sep" role="separator" />
-          ) : (
-            <button
-              type="button"
-              key={`${row.label}-${i}`}
-              role="menuitem"
-              className="pap-popover__row pap-popover__row--button pap-context__item"
-              onClick={row.run}
-            >
-              <span className="pap-popover__label">{row.label}</span>
-              {row.shortcut && (
-                <span className="pap-popover__meta">{row.shortcut}</span>
-              )}
-            </button>
-          ),
-        )}
-      </motion.div>
-    </AnimatePresence>,
+    <motion.div
+      ref={ref}
+      className="pap-popover pap-context"
+      role="menu"
+      tabIndex={-1}
+      style={{ position: "fixed", top: pos.y, left: pos.x, transformOrigin: origin }}
+      onKeyDown={onKeyDown}
+      onMouseMove={onMouseMove}
+      initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.97, y: -2 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={{ duration: 0.13, ease: HOVER_EASE }}
+    >
+      {rows.map((row, i) =>
+        row.kind === "separator" ? (
+          <div key={`sep-${i}`} className="pap-context__sep" role="separator" />
+        ) : (
+          <button
+            type="button"
+            key={`${row.label}-${i}`}
+            role="menuitem"
+            className="pap-popover__row pap-popover__row--button pap-context__item"
+            onClick={row.run}
+          >
+            <span className="pap-popover__label">{row.label}</span>
+            {row.shortcut && (
+              <span className="pap-popover__meta">{row.shortcut}</span>
+            )}
+          </button>
+        ),
+      )}
+    </motion.div>,
     document.body,
   );
 }

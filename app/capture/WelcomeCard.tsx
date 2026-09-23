@@ -4,8 +4,7 @@ import { useEffect } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { useT, type MessageKey } from "../lib/i18n";
-
-const HOVER_EASE: [number, number, number, number] = [0.23, 1, 0.32, 1];
+import { HOVER_EASE } from "./ui-motion";
 
 const TIPS: { badge: string; key: MessageKey }[] = [
   { badge: "⌘N", key: "welcome.tip.new" },

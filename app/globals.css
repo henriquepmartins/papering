@@ -28,10 +28,7 @@
 
   --radius-panel: 14px;
 
-  /* Springy overshoot — popover/scale enters. */
-  --ease-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
   /* Plain ease-out (no overshoot) — opacity/color micro-transitions. Mirrors
      HOVER_EASE in app/capture/ui-motion.ts. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
-  --duration-pop: 220ms;
 }
