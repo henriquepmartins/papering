@@ -7,6 +7,7 @@
     /* Zoomed with ⌘+ / ⌘- (inline override from CaptureEditor). Sizes below are
        written as ratios of it so 15px reproduces the original px values. */
     --editor-font-size: 15px;
+    position: relative;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -22,8 +23,34 @@
     font-family: var(--font-sans);
     font-size: var(--editor-font-size);
     line-height: 1.55;
-    caret-color: var(--color-caret);
+    /* The Caret extension draws the caret; see extensions/caret.ts. */
+    caret-color: transparent;
     outline: none;
+  }
+
+  .editor-host .tiptap.pap-composing {
+    caret-color: var(--color-caret);
+  }
+
+  .pap-caret {
+    position: absolute;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--color-caret);
+    pointer-events: none;
+    animation: pap-caret-blink 1.06s steps(1) infinite;
+  }
+
+  @keyframes pap-caret-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pap-caret {
+      animation: none;
+    }
   }
 
   .editor-host .tiptap > * + * {

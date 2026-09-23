@@ -22,6 +22,7 @@ import { getCurrentLocale } from "../i18n";
 import { translate } from "../i18n/messages";
 import { toggleLink } from "./commands";
 import { SlashCommand } from "./slashCommand";
+import { Caret } from "./extensions/caret";
 import { MarkdownImage } from "./extensions/markdown-image";
 
 export { setAttachmentsBase } from "./extensions/markdown-image";
@@ -276,6 +277,7 @@ export const editorExtensions = [
   EscapeToken,
   MarkdownPaste,
   NoteShortcuts,
+  Caret,
   // Tables (GFM). v3's @tiptap/extension-table ships parseMarkdown/renderMarkdown,
   // so they round-trip through @tiptap/markdown with no custom spec.
   Table,
