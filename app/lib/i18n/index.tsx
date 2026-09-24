@@ -20,8 +20,6 @@ import {
 
 const STORAGE_KEY = "pap.locale";
 
-// Module-level mirror of the active locale so non-React code (the slash-command
-// extension, built once at module load) can localise its labels lazily.
 let currentLocale: Locale = DEFAULT_LOCALE;
 export function getCurrentLocale(): Locale {
   return currentLocale;
@@ -50,8 +48,6 @@ type LocaleContextValue = {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  // Start from the default so server and first client render agree (no hydration
-  // mismatch); the stored preference is applied right after mount below.
   const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
 
   useEffect(() => {
@@ -60,7 +56,6 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       currentLocale = stored;
       setLocaleState(stored);
     }
-    // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -70,8 +65,6 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     try {
       window.localStorage.setItem(STORAGE_KEY, next);
     } catch {
-      // Storage may be unavailable (private mode, etc.) — the choice still
-      // applies for this session.
     }
   }, []);
 

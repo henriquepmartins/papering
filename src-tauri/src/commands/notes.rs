@@ -19,7 +19,7 @@ pub struct NoteMeta {
 }
 
 #[tauri::command]
-pub fn save_note(content: String, path: Option<String>) -> Result<SaveNoteResult, String> {
+pub async fn save_note(content: String, path: Option<String>) -> Result<SaveNoteResult, String> {
     let outcome = match path {
         Some(p) => persist_to_path(&p, &content).map_err(|err| format!("{err:#}"))?,
         None => persist_note(&content).map_err(|err| format!("{err:#}"))?,
@@ -32,12 +32,12 @@ pub fn save_note(content: String, path: Option<String>) -> Result<SaveNoteResult
 }
 
 #[tauri::command]
-pub fn list_notes() -> Result<Vec<NoteMeta>, String> {
+pub async fn list_notes() -> Result<Vec<NoteMeta>, String> {
     let folder = notes_root::capture_folder().map_err(|e| e.to_string())?;
     let mut out = Vec::new();
     let read = match std::fs::read_dir(&folder) {
         Ok(r) => r,
-        Err(_) => return Ok(out),
+        Err(_) => return Ok(Vec::new()),
     };
     for entry in read {
         let entry = match entry {
@@ -58,21 +58,23 @@ pub fn list_notes() -> Result<Vec<NoteMeta>, String> {
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
-        let content = std::fs::read_to_string(&path).unwrap_or_default();
-        let title = derive_title(&content);
-        out.push(NoteMeta {
-            path: path.to_string_lossy().into_owned(),
-            title,
-            updated_at: mtime,
-        });
+        out.push((path, mtime));
     }
-    out.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    out.sort_by(|a, b| b.1.cmp(&a.1));
     out.truncate(20);
+    let out = out
+        .into_iter()
+        .map(|(path, updated_at)| NoteMeta {
+            title: derive_title(&std::fs::read_to_string(&path).unwrap_or_default()),
+            path: path.to_string_lossy().into_owned(),
+            updated_at,
+        })
+        .collect();
     Ok(out)
 }
 
 #[tauri::command]
-pub fn load_note(path: String) -> Result<String, String> {
+pub async fn load_note(path: String) -> Result<String, String> {
     let root = notes_root::notes_root().map_err(|e| e.to_string())?;
     let p = Path::new(&path);
     let canonical = p
@@ -86,7 +88,7 @@ pub fn load_note(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn delete_note(path: String) -> Result<(), String> {
+pub async fn delete_note(path: String) -> Result<(), String> {
     let root = notes_root::notes_root().map_err(|e| e.to_string())?;
     let p = Path::new(&path);
     let canonical = p
@@ -99,15 +101,12 @@ pub fn delete_note(path: String) -> Result<(), String> {
     std::fs::remove_file(&canonical).map_err(|e| e.to_string())
 }
 
-/// Remove inline image markdown (`![alt](src)`) so a note that opens with a
-/// pasted image still derives a sensible title from the following text.
 fn strip_image_markdown(line: &str) -> String {
     let mut out = String::with_capacity(line.len());
     let mut rest = line;
     while let Some(start) = rest.find("![") {
         out.push_str(&rest[..start]);
         let after = &rest[start + 2..];
-        // Expect `]( … )` to close the image; otherwise keep the text as-is.
         if let Some(close_alt) = after.find("](") {
             let after_paren = &after[close_alt + 2..];
             if let Some(close_paren) = after_paren.find(')') {

@@ -1,13 +1,14 @@
 name: Release
 
-# Push a tag like `v0.2.0` to build, sign, and publish a macOS release.
-# The build produces a universal binary (Intel + Apple Silicon) plus the
-# updater artifacts (.app.tar.gz + .sig) and a `latest.json` manifest that
-# tauri-plugin-updater reads from the GitHub release.
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -16,6 +17,18 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        run: |
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          next="$major.$minor.$((patch + 1))"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          jq --arg v "$next" '.version = $v' src-tauri/tauri.conf.json > conf.tmp && mv conf.tmp src-tauri/tauri.conf.json
+          jq --arg v "$next" '.version = $v' package.json > pkg.tmp && mv pkg.tmp package.json
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -42,8 +55,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "Papering ${{ github.ref_name }}"
+          tagName: v${{ steps.version.outputs.version }}
+          releaseName: "Papering v${{ steps.version.outputs.version }}"
+          releaseCommitish: ${{ github.sha }}
           releaseDraft: false
           prerelease: false
           args: --target universal-apple-darwin
+
+      - name: Notify installed apps
+        run: curl -fsS -d "v${{ steps.version.outputs.version }}" https://ntfy.sh/papering-release-1134eb869c079610

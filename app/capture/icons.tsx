@@ -1,6 +1,3 @@
-// Inline SVG glyphs for the capture chrome (titlebar, format bar, note rows).
-// Pure presentational components — they inherit colour via `currentColor`.
-
 export function NotesIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
@@ -27,7 +24,6 @@ export function GearIcon() {
   );
 }
 
-// Highlighter marker — used for the highlight/marca-texto format button.
 export function MarkerIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
@@ -48,7 +44,6 @@ export function LinkIcon() {
   );
 }
 
-// Eraser — clear-formatting button.
 export function EraserIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">

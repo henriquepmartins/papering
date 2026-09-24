@@ -2,7 +2,6 @@ use anyhow::Result;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-/// Default warm-capture hotkey: Control+Option+N (⌃⌥N).
 fn default_hotkey() -> Shortcut {
     Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN)
 }
@@ -16,7 +15,6 @@ pub fn register(app: AppHandle) -> Result<()> {
             return;
         }
         if let Some(window) = handle.get_webview_window("capture") {
-            // Toggle: if visible & focused, hide; otherwise show & focus.
             let is_visible = window.is_visible().unwrap_or(false);
             let is_focused = window.is_focused().unwrap_or(false);
 

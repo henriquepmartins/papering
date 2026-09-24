@@ -1,37 +1,27 @@
-// Lightweight i18n dictionaries for Papering. No library — the app has a small,
-// fixed string set, so two flat dictionaries keyed by the same identifiers keep
-// it dependency-free and easy to scan. Portuguese is the default locale.
-
 export type Locale = "pt" | "en";
 
 export const LOCALES: Locale[] = ["pt", "en"];
 
-// Every key must exist in both dictionaries. `Messages` is derived from the
-// Portuguese dictionary so TypeScript flags any key missing from `en`.
 export type MessageKey = keyof typeof pt;
 export type Messages = Record<MessageKey, string>;
 
 export const pt = {
-  // Generic / note state
   "note.new": "Nova nota",
   "note.untitled": "Sem título",
   "editor.placeholder": "Comece a escrever…",
   "hints.characters": "{n} caracteres",
   "hints.words": "{n} palavras",
 
-  // Titlebar buttons
   "btn.shortcuts": "Atalhos",
   "btn.notes": "Notas",
   "btn.newNote": "Nova nota",
   "btn.settings": "Ajustes",
   "btn.formatting": "Formatação",
 
-  // Notes popover
   "notes.empty": "Nenhuma nota ainda",
   "notes.delete": "Excluir nota",
   "notes.confirmDelete": "Confirmar exclusão",
 
-  // Shortcuts popover
   "sc.capture": "Capturar",
   "sc.saveClose": "Salvar e fechar",
   "sc.bold": "Negrito",
@@ -45,13 +35,11 @@ export const pt = {
   "sc.openNotes": "Abrir notas",
   "sc.settings": "Ajustes",
 
-  // Settings popover
   "settings.title": "Ajustes",
   "settings.language": "Idioma",
   "settings.lang.pt": "Português",
   "settings.lang.en": "Inglês",
 
-  // Context menu / formatting actions
   "ctx.cut": "Recortar",
   "ctx.copy": "Copiar",
   "ctx.paste": "Colar",
@@ -74,7 +62,6 @@ export const pt = {
   "ctx.group.format": "Formatar",
   "ctx.group.insert": "Inserir",
 
-  // Slash menu
   "slash.heading1": "Título 1",
   "slash.heading2": "Título 2",
   "slash.heading3": "Título 3",
@@ -99,7 +86,6 @@ export const pt = {
   "slash.date.hint": "Data de hoje",
   "slash.empty": "Nenhum comando",
 
-  // Welcome card
   "welcome.title": "Bem-vindo ao Papering",
   "welcome.subtitle": "Um lugar rápido e tranquilo para escrever suas notas.",
   "welcome.tip.new": "criar uma nova nota",
@@ -207,8 +193,6 @@ export const dictionaries: Record<Locale, Messages> = { pt, en };
 
 export const DEFAULT_LOCALE: Locale = "pt";
 
-// Resolve a message and interpolate `{name}` placeholders. Falls back to the key
-// itself if missing (only possible while editing the dictionaries).
 export function translate(
   locale: Locale,
   key: MessageKey,

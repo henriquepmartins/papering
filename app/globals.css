@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-/* Styles are split into focused files under ./styles, imported in source order
-   so the cascade is identical to the original single file. */
 @import "./styles/reset.css";
 @import "./styles/window.css";
 @import "./styles/popover.css";
@@ -19,8 +17,6 @@
   --color-border-strong: oklch(0 0 0 / 0.14);
   --color-accent: oklch(0.62 0.18 25);
   --color-caret: var(--color-accent);
-  /* Warm pink selection — a touch deeper/more saturated than the old #fbe4e3
-     so the highlighted text reads clearly without shouting. */
   --color-selection: rgba(250, 205, 202, 0.95);
 
   --font-sans: -apple-system, "SF Pro Text", Inter, ui-sans-serif, system-ui, sans-serif;
@@ -28,7 +24,5 @@
 
   --radius-panel: 14px;
 
-  /* Plain ease-out (no overshoot) — opacity/color micro-transitions. Mirrors
-     HOVER_EASE in app/capture/ui-motion.ts. */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }

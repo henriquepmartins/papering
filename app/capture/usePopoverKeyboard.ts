@@ -8,11 +8,6 @@ import {
   type RefObject,
 } from "react";
 
-// Roving focus for a vertical popover menu. Focus is the only highlight: arrows
-// wrap it, and the pointer moves it to the row under the cursor, so hover and
-// keyboard can never mark two rows at once. `autoFocus` picks what gets focus on
-// mount (the first row, or the menu itself so no row starts highlighted);
-// `focusDeps` re-runs that (e.g. when a list's length changes after a delete).
 export function usePopoverKeyboard(
   containerRef: RefObject<HTMLElement | null>,
   itemSelector: string,

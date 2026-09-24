@@ -18,8 +18,6 @@
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
     overflow: hidden;
-    /* App chrome is not a document: no text selection, arrow cursor. The
-       editor opts back in below. */
     -webkit-user-select: none;
     user-select: none;
     cursor: default;
@@ -29,8 +27,6 @@
     background: var(--color-selection);
   }
 
-  /* Chrome icons are all inline SVGs — stop them being dragged out as a ghost
-     image (a web tell). Editor content uses <img>, which stays draggable. */
   svg {
     -webkit-user-drag: none;
   }
@@ -45,7 +41,6 @@
     user-select: text;
   }
 
-  /* Keyboard focus ring for chrome buttons that have no row highlight. */
   .capture-titlebar__icons button:focus-visible,
   .capture-hints__count:focus-visible,
   .capture-hints__format:focus-visible,
@@ -55,9 +50,6 @@
     box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-accent) 45%, transparent);
   }
 
-  /* Task-list checkboxes are interactive — show the native arrow cursor rather
-     than inheriting the blanket `cursor: text` above. (No `pointer`: a hand
-     cursor on controls is a web tell.) */
   .editor-host input[type="checkbox"],
   .editor-host ul[data-type="taskList"] > li > label {
     cursor: default;

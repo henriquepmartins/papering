@@ -1,11 +1,5 @@
 @layer base {
-  /* Tiptap editor surface — the .tiptap class is set in useCaptureEditor
-     (editorProps.attributes.class), which Tiptap applies to its
-     .ProseMirror contenteditable. We keep all editor typography under
-     .editor-host .tiptap so the rules don't leak elsewhere. */
   .editor-host {
-    /* Zoomed with ⌘+ / ⌘- (inline override from CaptureEditor). Sizes below are
-       written as ratios of it so 15px reproduces the original px values. */
     --editor-font-size: 15px;
     position: relative;
     display: flex;
@@ -23,7 +17,6 @@
     font-family: var(--font-sans);
     font-size: var(--editor-font-size);
     line-height: 1.55;
-    /* The Caret extension draws the caret; see extensions/caret.ts. */
     caret-color: transparent;
     outline: none;
   }
@@ -57,7 +50,6 @@
     margin-top: 0.4em;
   }
 
-  /* Headings */
   .editor-host .tiptap h1 {
     font-size: calc(var(--editor-font-size) * 22 / 15);
     font-weight: 700;
@@ -79,12 +71,10 @@
     margin: 0.4em 0 0.1em;
   }
 
-  /* Paragraph */
   .editor-host .tiptap p {
     margin: 0;
   }
 
-  /* Pasted images */
   .editor-host .tiptap img {
     display: block;
     max-width: 100%;
@@ -99,7 +89,6 @@
     outline-offset: 1px;
   }
 
-  /* Inline */
   .editor-host .tiptap strong {
     font-weight: 600;
   }
@@ -125,8 +114,6 @@
     text-decoration-thickness: 1px;
     text-decoration-color: var(--color-accent);
   }
-  /* Highlight (marca-texto) — classic warm yellow marker. Round-trips through
-     markdown as ==text== via MarkdownHighlight. */
   .editor-host .tiptap mark {
     background: #fdf0a6;
     color: inherit;
@@ -144,8 +131,6 @@
     border: 1px solid var(--color-border);
   }
 
-  /* Lists — explicit list-style required because Tailwind v4 Preflight
-     resets `list-style: none` on all ul/ol globally. */
   .editor-host .tiptap ul,
   .editor-host .tiptap ol {
     padding-left: 1.4em;
@@ -172,7 +157,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* Task list — Tiptap renders <ul data-type="taskList"> with <li data-type="taskItem"> > <label><input/></label> + <div> */
   .editor-host .tiptap ul[data-type="taskList"] {
     list-style: none;
     padding-left: 0;
@@ -223,7 +207,6 @@
     text-decoration-color: var(--color-text-faint);
   }
 
-  /* Blockquote */
   .editor-host .tiptap blockquote {
     border-left: 3px solid var(--color-border-strong);
     padding-left: 10px;
@@ -232,7 +215,6 @@
     font-style: italic;
   }
 
-  /* Fenced code block */
   .editor-host .tiptap pre {
     margin: 0;
     padding: 10px 12px;
@@ -253,14 +235,12 @@
     border-radius: 0;
   }
 
-  /* Horizontal rule */
   .editor-host .tiptap hr {
     border: 0;
     border-top: 1px solid var(--color-border-strong);
     margin: 12px 0;
   }
 
-  /* Tables (GFM) */
   .editor-host .tiptap table {
     border-collapse: collapse;
     width: 100%;
@@ -285,7 +265,6 @@
   .editor-host .tiptap td > * {
     margin: 0;
   }
-  /* Cell selected via the table’s column/cell selection. */
   .editor-host .tiptap .selectedCell::after {
     content: "";
     position: absolute;
@@ -299,8 +278,6 @@
     position: relative;
   }
 
-  /* Placeholder (empty doc) — Tiptap Placeholder ext adds .is-editor-empty
-     and a data-placeholder attr to the first empty node. */
   .editor-host .tiptap p.is-editor-empty:first-child::before {
     content: attr(data-placeholder);
     color: var(--color-text-faint);
@@ -309,7 +286,6 @@
     pointer-events: none;
   }
 
-  /* Selection inside the editor */
   .editor-host .tiptap ::selection {
     background: var(--color-selection);
   }

@@ -29,9 +29,6 @@ type SlashItem = {
   run: (editor: Editor, range: Range) => void;
 };
 
-// The slash menu's items are the block commands' slash presentation, resolved
-// from the active locale at call time so the menu follows a language switch
-// without rebuilding the extension. Behaviour lives in the shared registry.
 function allItems(): SlashItem[] {
   const t = (key: MessageKey) => translate(getCurrentLocale(), key);
   return BLOCK_COMMANDS.flatMap((cmd) =>
@@ -49,8 +46,6 @@ function allItems(): SlashItem[] {
   );
 }
 
-// ── Menu UI ─────────────────────────────────────────────────────────────────
-
 type SlashMenuHandle = { onKeyDown: (props: SuggestionKeyDownProps) => boolean };
 
 type SlashMenuProps = {
@@ -63,10 +58,8 @@ const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(
     const [selected, setSelected] = useState(0);
     const listRef = useRef<HTMLDivElement>(null);
 
-    // Reset selection whenever the filtered set changes.
     useEffect(() => setSelected(0), [items]);
 
-    // Keep the active row scrolled into view.
     useLayoutEffect(() => {
       const el = listRef.current?.children[selected] as HTMLElement | undefined;
       el?.scrollIntoView({ block: "nearest" });
@@ -131,8 +124,6 @@ const SlashMenu = forwardRef<SlashMenuHandle, SlashMenuProps>(
   },
 );
 
-// ── Extension ─────────────────────────────────────────────────────────────────
-
 export const slashPluginKey = new PluginKey("slashCommand");
 
 export const SlashCommand = Extension.create({
@@ -144,8 +135,6 @@ export const SlashCommand = Extension.create({
         pluginKey: slashPluginKey,
         editor: this.editor,
         char: "/",
-        // Only trigger at the start of an empty-ish text block so "/" inside a
-        // word (e.g. URLs, dates) never pops the menu.
         allow: ({ state, range }) => {
           const $from = state.doc.resolve(range.from);
           const isStart = $from.parentOffset <= 1;

@@ -11,7 +11,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { useCaptureEditor } from "../lib/editor/tiptap";
 import { setAttachmentsBase } from "../lib/editor/extensions";
-import { checkForUpdates } from "../lib/updater";
+import { startAutoUpdate } from "../lib/updater";
 import { useLocale, useT, type MessageKey } from "../lib/i18n";
 import { clearFormatting, toggleLink } from "../lib/editor/commands";
 import { useTooltip } from "./useTooltip";
@@ -53,8 +53,6 @@ function startResize(dir: ResizeDir) {
   return (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    // tao's `startResizeDragging` is a no-op on macOS, so resizing goes through
-    // a native AppKit drag loop in the Rust `start_resize` command instead.
     invoke("start_resize", { direction: dir }).catch((err) =>
       console.error("[resize] failed", dir, err),
     );
@@ -94,7 +92,6 @@ function writeStored(key: string, value: string) {
   try {
     window.localStorage.setItem(key, value);
   } catch {
-    // Storage unavailable: the choice just won't survive a relaunch.
   }
 }
 
@@ -141,9 +138,6 @@ export default function CaptureEditor() {
   const [ctxMenu, setCtxMenu] = useState<ContextAnchor | null>(null);
   const [formatOpen, setFormatOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
-  // Whether the last open or close of a title-bar popover came from the
-  // keyboard. Keyboard actions never animate (Raycast's launcher has no open
-  // or close animation); mouse-driven ones keep the subtle scale/slide.
   const [popoverInstant, setPopoverInstant] = useState(false);
   const [formatInstant, setFormatInstant] = useState(false);
   const [notes, setNotes] = useState<NoteMeta[]>([]);
@@ -177,7 +171,6 @@ export default function CaptureEditor() {
     },
   });
 
-  // Counts what the reader sees, not the markdown source (`**` and friends).
   const text =
     useEditorState({
       editor,
@@ -210,24 +203,17 @@ export default function CaptureEditor() {
     });
   };
 
-  // Check for app updates once on startup (no-op outside Tauri).
-  useEffect(() => {
-    void checkForUpdates();
-  }, []);
+  useEffect(() => startAutoUpdate(), []);
 
-  // Focus + announce ready as soon as the editor instance is available.
   useEffect(() => {
     if (!editor) return;
     editor.commands.focus();
     captureReady().catch(() => {});
-    // Cache the attachments base dir so pasted/loaded images resolve to an
-    // `asset:` URL before any note with images is opened.
     attachmentsBase()
       .then((dir) => dir && setAttachmentsBase(dir))
       .catch(() => {});
   }, [editor]);
 
-  // Flush on window blur and on unmount.
   useEffect(() => {
     const onWindowBlur = () => void flushSave();
     window.addEventListener("blur", onWindowBlur);
@@ -272,8 +258,6 @@ export default function CaptureEditor() {
     setPopover((p: Popover) => (p === "settings" ? null : "settings"));
   };
 
-  // Always-fresh refs for the action handlers — the keybinding effect runs
-  // once (no deps) so it captures these via the ref, not stale closures.
   const actionsRef = useRef({
     openNotes: (_instant?: boolean) => {},
     handleNew: () => {},
@@ -300,7 +284,6 @@ export default function CaptureEditor() {
       setPopover(null);
       return;
     }
-    // Open on the cached list at once; the fresh one swaps in when it lands.
     setPopover("notes");
     await refreshNotes();
   };
@@ -339,10 +322,14 @@ export default function CaptureEditor() {
     }
   };
 
-  const handleOpenLastOrNew = useCallback(async () => {
+  const handleOpenLastOrNew = async () => {
     try {
       const list = await listNotes();
       if (list.length > 0) {
+        if (list[0].path === currentPathRef.current) {
+          editor?.commands.focus();
+          return;
+        }
         await handleOpenNote(list[0].path);
         return;
       }
@@ -350,9 +337,8 @@ export default function CaptureEditor() {
       console.error("list_notes failed", err);
     }
     await handleNew();
-  }, []);
+  };
 
-  // Keep the keybinding effect's refs pointed at the latest handlers.
   actionsRef.current.openNotes = openNotes;
   actionsRef.current.handleNew = handleNew;
   actionsRef.current.handleOpenLastOrNew = handleOpenLastOrNew;
@@ -361,7 +347,6 @@ export default function CaptureEditor() {
   actionsRef.current.openShortcuts = openShortcuts;
   actionsRef.current.zoom = zoom;
 
-  // Backend → frontend: global hotkey (⌃⌥N) — resume most recent note or start fresh.
   useEffect(() => {
     if (!isTauri()) return;
     const win = getCurrentWindow();
@@ -373,10 +358,6 @@ export default function CaptureEditor() {
     };
   }, []);
 
-  // Right-click opens our own command menu everywhere (never the WebKit menu,
-  // which is an instant "this is a website" tell). The menu is context-aware:
-  // formatting/clipboard actions when text is selected, insert + app commands
-  // otherwise. Resize bands keep the native cursor but no menu.
   useEffect(() => {
     const onContextMenu = (e: MouseEvent) => {
       e.preventDefault();
@@ -390,21 +371,16 @@ export default function CaptureEditor() {
     return () => document.removeEventListener("contextmenu", onContextMenu);
   }, []);
 
-  // Re-render the editor's placeholder decoration and the default title when the
-  // language changes (the placeholder reads the locale lazily; an empty
-  // transaction forces ProseMirror to recompute the decoration).
   useEffect(() => {
     if (!editor) return;
     editor.view.dispatch(editor.state.tr);
     if (!docRef.current.trim()) setTitle(t("note.new"));
   }, [locale, editor, t]);
 
-  // First-run welcome card (once per install).
   useEffect(() => {
     try {
       if (!window.localStorage.getItem("pap.onboarded")) setShowWelcome(true);
     } catch {
-      // Storage unavailable — skip onboarding rather than block the app.
     }
   }, []);
 
@@ -413,17 +389,13 @@ export default function CaptureEditor() {
     try {
       window.localStorage.setItem("pap.onboarded", "1");
     } catch {
-      // Ignore — the card simply won't be suppressed next launch.
     }
     editor?.commands.focus();
   }, [editor]);
 
-  // Global shortcuts: ⌘K (shortcuts panel), ⌘P or ⌘O (notes list), ⌘N (new
-  // note), ⌘, (settings), ⌘+ / ⌘- / ⌘0 (text size).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
-      // ⌘+ arrives with Shift held on most layouts, so zoom is matched first.
       const zoomStep = { "=": 1, "+": 1, "-": -1 }[e.key];
       if (zoomStep || e.key === "0") {
         e.preventDefault();
@@ -436,7 +408,7 @@ export default function CaptureEditor() {
       if (key === "k") {
         e.preventDefault();
         e.stopPropagation();
-        setPopoverInstant(true); // keyboard-triggered → no enter animation
+        setPopoverInstant(true);
         setPopover((p) => {
           const next = p === "shortcuts" ? null : "shortcuts";
           if (next === null) actionsRef.current.focusEditor();
@@ -445,13 +417,12 @@ export default function CaptureEditor() {
       } else if (key === "p" || key === "o") {
         e.preventDefault();
         e.stopPropagation();
-        void actionsRef.current.openNotes(true); // keyboard → instant
+        void actionsRef.current.openNotes(true);
       } else if (key === "n") {
         e.preventDefault();
         e.stopPropagation();
         void actionsRef.current.handleNew();
       } else if (key === ",") {
-        // ⌘, → settings (standard macOS Preferences shortcut).
         e.preventDefault();
         e.stopPropagation();
         setPopoverInstant(true);
@@ -469,7 +440,6 @@ export default function CaptureEditor() {
   const handleDeleteNote = async (path: string) => {
     try {
       await deleteNote(path);
-      // If the deleted note is the currently open one, clear the editor too.
       if (currentPathRef.current === path) {
         editor?.commands.clearContent(false);
         docRef.current = "";
@@ -653,9 +623,6 @@ function IconButton({
 
 type TipAnchor = { top: number; left: number; below?: boolean };
 
-// Hover tooltip shared by the titlebar icons, the format buttons and the footer
-// "T": a portal to <body> so it escapes the shell's clipping. It is clamped into
-// the window after render, using its measured width.
 function Tooltip({
   tip,
   setTip,
@@ -745,9 +712,6 @@ function FormatToggle({ label, onClick }: { label: string; onClick: () => void }
   );
 }
 
-// Shared formatting controls used by both the selection bubble menu and the
-// footer "T" popover. Active states are read reactively via useEditorState so
-// the buttons highlight as the cursor moves.
 const FORMAT_BUTTONS: {
   key: string;
   glyph: React.ReactNode;
@@ -805,9 +769,6 @@ function FormatBar({ editor }: { editor: Editor }) {
   );
 }
 
-// A format button that shows a hover tooltip naming what the glyph does (e.g.
-// "H2" → "Heading 2"), since the icons alone aren't obvious to everyone. It
-// flips below the button when there's no room above.
 function FormatTipButton({
   label,
   active,
@@ -825,7 +786,7 @@ function FormatTipButton({
   const { anchor, setAnchor, instant, mounted, start, end } = useTooltip<TipAnchor>(() => {
     const rect = btnRef.current?.getBoundingClientRect();
     if (!rect) return null;
-    const below = rect.top < 44; // not enough room above → drop below
+    const below = rect.top < 44;
     return { top: below ? rect.bottom + 6 : rect.top - 6, left: rect.left + rect.width / 2, below };
   });
 
@@ -858,7 +819,6 @@ function FormatTipButton({
   );
 }
 
-// Footer "T" popover — same formatting controls, anchored above the button.
 function FormatPopover({
   editor,
   onClose,
@@ -909,4 +869,3 @@ function FormatPopover({
     </motion.div>
   );
 }
-

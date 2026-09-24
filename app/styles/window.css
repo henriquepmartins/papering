@@ -1,39 +1,16 @@
 @layer base {
-  /* Outer frame: invisible padding around the visible card so tooltips can
-     render above the icons, outside the rounded shell. The OS window itself
-     is `transparent: true` so this padding shows the desktop directly.
-     NOTE: this padding (50/20/10) and --radius-panel (14px) are mirrored as
-     the PAD_ and CARD_RADIUS constants in src-tauri/src/vibrancy.rs, which inset
-     the native NSVisualEffectView to match the card — keep them in sync. */
   .capture-window {
     width: 100vw;
     height: 100vh;
     padding: 50px 20px 10px;
     position: relative;
-    /* No rubber-band/overscroll glow — a web-scroll tell. */
     overscroll-behavior: none;
   }
 
-  /* Invisible resize handles tracing the OS window edges. macOS hides them
-     because `decorations: false` removes the OS chrome — these add the
-     missing grab regions in the transparent padding zone. */
   .capture-resize {
     position: absolute;
-    /* Alpha must be >= 1/255 (≈0.0039) so the 8-bit compositor never rounds it
-       to 0. On a `transparent: true` macOS window the OS derives the clickable
-       window shape from rendered pixel alpha: a fully-transparent pixel is
-       click-through, so mousedown never reaches the band and resize silently
-       fails. (The old 0.001 rounded to 0 — that was the bug.) This keeps the
-       band invisible while making it hit-testable. */
     background: rgba(0, 0, 0, 0.004);
   }
-  /* The four edges fully tile the transparent padding frame (50px 20px 10px),
-     each spanning its whole side and filling that side's padding thickness, so
-     the entire border around the visible card is grabbable. Edges stop exactly
-     at the card border, touching but never overlapping the interactive shell or
-     its `data-tauri-drag-region` titlebar. Overlaps occur only in the corners,
-     where z-index resolves them deterministically: corners (12) > N/S (11) >
-     W/E (10). */
   .capture-resize--n {
     top: 0;
     left: 0;
@@ -66,7 +43,6 @@
     cursor: ew-resize;
     z-index: 10;
   }
-  /* 28×28 corners override the edges in the diagonal zones. */
   .capture-resize--nw {
     top: 0;
     left: 0;
@@ -108,20 +84,10 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    /* Frosted glass (Raycast Notes look). Two layers compose:
-       1. CSS `backdrop-filter` blurs the desktop directly behind the
-          transparent webview — this is what reads as the visible frost.
-       2. The always-active NSVisualEffectView (Sidebar / State::Active) pinned
-          behind the webview in `src-tauri/src/vibrancy.rs` sits underneath as a
-          focus-independent backstop: WebKit fades `backdrop-filter` toward zero
-          on unfocused windows, and the native layer absorbs most of that drop.
-       A single low-opacity warm tint sits on top so the blur shows through. */
-    background: rgba(240, 240, 240, 0.5);
-    backdrop-filter: blur(30px) saturate(1.8);
-    -webkit-backdrop-filter: blur(30px) saturate(1.8);
+    background: rgba(255, 255, 255, 0.62);
     box-shadow:
-      inset 0 0 0 1px rgba(0, 0, 0, 0.06),
-      inset 0 1px 0 rgba(255, 255, 255, 0.55);
+      inset 0 0 0 1px rgba(0, 0, 0, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
   }
 
   .capture-shell > .editor-host {
@@ -170,8 +136,6 @@
     opacity: 0.75;
   }
 
-  /* Motion handles background + scale on hover/tap; CSS only manages base look
-     and color (the latter is too tiny a change to merit a JS-driven transition). */
   .capture-titlebar__icons button {
     all: unset;
     width: 26px;
@@ -264,10 +228,6 @@
     }
   }
 
-  /* Tooltips on titlebar icons — rendered via React portal to <body>, so the
-     positioning is set inline on `.pap-tooltip-portal`. This class only owns
-     visual styling. The portal anchor lives in the transparent padding above
-     the visible shell, escaping `overflow: hidden` clipping. */
   .pap-tooltip-portal {
     position: fixed;
     transform: translate(-50%, -100%);
@@ -275,8 +235,6 @@
     z-index: 60;
   }
 
-  /* Tooltip flipped below its anchor (used when there's no room above, e.g. a
-     format button near the top of the window). */
   .pap-tooltip-portal--below {
     transform: translate(-50%, 0);
   }

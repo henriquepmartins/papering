@@ -1,5 +1,4 @@
 @layer base {
-  /* Popovers (shortcuts + notes list) */
   .pap-popover {
     position: absolute;
     top: 36px;
@@ -54,7 +53,6 @@
     text-align: left;
   }
 
-  /* Notes-list row: pick button + delete button side by side. */
   .pap-popover__row--note {
     padding: 0;
     align-items: stretch;

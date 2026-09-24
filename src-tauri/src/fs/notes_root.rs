@@ -14,8 +14,6 @@ pub fn capture_folder() -> Result<PathBuf> {
     Ok(notes_root()?.join(DEFAULT_CAPTURE_FOLDER))
 }
 
-/// `~/Notes/Inbox/attachments` — where pasted images are stored. Markdown
-/// references them relative to the capture folder (`attachments/<file>`).
 pub fn attachments_folder() -> Result<PathBuf> {
     Ok(capture_folder()?.join(ATTACHMENTS_FOLDER))
 }

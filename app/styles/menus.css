@@ -1,5 +1,4 @@
 @layer base {
-  /* Settings popover */
   .pap-popover__section {
     padding: 6px 8px 2px;
     font-size: 11px;
@@ -17,9 +16,6 @@
     text-align: center;
   }
 
-  /* Right-click context menu — reuses .pap-popover visuals but is positioned at
-     the cursor via inline fixed coords, so the default top/right anchoring is
-     cleared. */
   .pap-context,
   .pap-slash {
     right: auto;
@@ -33,7 +29,6 @@
     background: var(--color-border);
   }
 
-  /* Selection bubble menu + footer "T" formatting popover */
   .pap-bubble {
     z-index: 55;
   }
@@ -91,7 +86,6 @@
     color: var(--color-accent);
   }
 
-  /* Format buttons act on mousedown, so the press needs its own feedback. */
   .pap-format__btn:active {
     background: oklch(0 0 0 / 0.1);
   }
@@ -103,7 +97,6 @@
     z-index: 55;
   }
 
-  /* Slash (/) command menu */
   .pap-slash__item {
     display: flex;
     align-items: center;

@@ -1,7 +1,3 @@
--- Papering — SQLite schema.
--- Slice 1: schema is created but not actively queried (notes are still file-only).
--- Slices 2+ populate and query these tables.
-
 CREATE TABLE IF NOT EXISTS notes (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     path        TEXT NOT NULL UNIQUE,

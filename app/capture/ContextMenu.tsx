@@ -26,10 +26,6 @@ type ContextMenuProps = {
   onShortcuts: () => void;
 };
 
-// Reliable clipboard helpers for a WKWebView contenteditable. Copy/cut use
-// execCommand (keeps rich content within the editor and works on the live DOM
-// selection); paste uses the async Clipboard API (execCommand("paste") is
-// blocked by WebKit).
 function copySelection(editor: Editor) {
   editor.view.focus();
   document.execCommand("copy");
@@ -43,7 +39,6 @@ async function pasteClipboard(editor: Editor) {
     const text = await navigator.clipboard.readText();
     if (text) editor.chain().focus().insertContent(text).run();
   } catch {
-    // Clipboard read may be denied — nothing to paste.
   }
 }
 
@@ -72,8 +67,6 @@ export default function ContextMenu({
   const rows: Row[] = [];
   if (editor) {
     const ed = editor;
-    // Render a registry command as a menu row, resolving its context-menu label
-    // and shortcut.
     const cmdRow = (id: string): Row => {
       const cmd = commandById(id);
       const ctx = cmd.context;
@@ -110,9 +103,6 @@ export default function ContextMenu({
     }
   }
 
-  // Clamp into the viewport after the menu is measured. offsetWidth/Height
-  // ignore the enter scale, which getBoundingClientRect would include. The
-  // transform origin stays on the cursor, wherever the clamp moved the menu.
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -123,13 +113,10 @@ export default function ContextMenu({
     setOrigin(`${anchor.x - left}px ${anchor.y - top}px`);
   }, [anchor]);
 
-  // The menu opens with no row highlighted, like a native context menu; the
-  // first arrow press lands on the first row.
   const { onKeyDown, onMouseMove } = usePopoverKeyboard(ref, ".pap-context__item", {
     autoFocus: "container",
   });
 
-  // Escape / click-outside close.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {

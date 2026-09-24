@@ -3,27 +3,13 @@ import type { ChainedCommands, Editor, Range } from "@tiptap/core";
 import { getCurrentLocale } from "../i18n";
 import type { MessageKey } from "../i18n/messages";
 
-// One canonical description of every editor action that more than one surface
-// invokes — the slash menu and the right-click menu. Each surface differs only
-// in presentation (labels, glyphs, shortcuts) and in whether the slash query
-// range must be deleted first; the *behaviour* lives here once. The format bar
-// is intentionally NOT modelled here: its heading buttons toggle (rather than
-// set) and it tracks active state, so it keeps its own list and only reuses the
-// shared `toggleLink` / `clearFormatting` helpers below.
-
 export type EditorCommand = {
   id: string;
-  /** Run the action. The slash menu passes its suggestion `range`. */
   run: (editor: Editor, range?: Range) => void;
-  /** Slash-menu presentation. Omitted for commands the slash menu doesn't show. */
   slash?: { title: MessageKey; hint: MessageKey; glyph: string };
-  /** Context-menu presentation. Omitted for commands the menu doesn't show. */
   context?: { label: MessageKey; shortcut?: string };
 };
 
-// Build a command whose effect is a chain transform. The slash menu passes the
-// suggestion `range` so the "/query" text is removed first; the context menu
-// doesn't — the same transform serves both.
 function chainCommand(
   spec: Omit<EditorCommand, "run">,
   apply: (chain: ChainedCommands) => ChainedCommands,
@@ -38,10 +24,6 @@ function chainCommand(
   };
 }
 
-// ── Link & clear: shared helpers ─────────────────────────────────────────────
-// These need full editor control (a prompt / multiple chains), so they're plain
-// functions reused by both the registry below and the format bar.
-
 export function toggleLink(editor: Editor): void {
   if (editor.isActive("link")) {
     editor.chain().focus().unsetLink().run();
@@ -55,8 +37,6 @@ export function clearFormatting(editor: Editor): void {
   editor.chain().focus().unsetAllMarks().clearNodes().run();
 }
 
-// Today's date, written out in the active locale (e.g. "19 de junho de 2026" /
-// "June 19, 2026").
 function formatToday(): string {
   const locale = getCurrentLocale() === "pt" ? "pt-BR" : "en-US";
   return new Date().toLocaleDateString(locale, {
@@ -65,10 +45,6 @@ function formatToday(): string {
     year: "numeric",
   });
 }
-
-// ── Block-level commands ─────────────────────────────────────────────────────
-// Shown in the slash menu; the subset with a `context` entry also appears in the
-// right-click "Insert" group (in this order).
 
 export const BLOCK_COMMANDS: EditorCommand[] = [
   chainCommand(
@@ -137,9 +113,6 @@ export const BLOCK_COMMANDS: EditorCommand[] = [
   ),
 ];
 
-// ── Mark / inline commands ───────────────────────────────────────────────────
-// Shown in the right-click menu when there's a selection.
-
 export const MARK_COMMANDS: EditorCommand[] = [
   chainCommand({ id: "bold", context: { label: "ctx.bold", shortcut: "⌘B" } }, (c) => c.toggleBold()),
   chainCommand({ id: "italic", context: { label: "ctx.italic", shortcut: "⌘I" } }, (c) => c.toggleItalic()),
@@ -154,7 +127,6 @@ const COMMANDS_BY_ID = new Map<string, EditorCommand>(
   [...BLOCK_COMMANDS, ...MARK_COMMANDS].map((cmd) => [cmd.id, cmd]),
 );
 
-/** Look up a command by id. Throws on an unknown id so typos fail loudly. */
 export function commandById(id: string): EditorCommand {
   const cmd = COMMANDS_BY_ID.get(id);
   if (!cmd) throw new Error(`unknown editor command: ${id}`);

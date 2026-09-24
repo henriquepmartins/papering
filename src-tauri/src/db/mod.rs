@@ -22,7 +22,6 @@ pub fn open() -> Result<Connection> {
     Ok(conn)
 }
 
-/// Run schema migrations. Idempotent — safe to call on every boot.
 pub fn init() -> Result<()> {
     let conn = open()?;
     conn.execute_batch(SCHEMA)?;

@@ -14,9 +14,6 @@ const TIPS: { badge: string; key: MessageKey }[] = [
   { badge: "/", key: "welcome.tip.slash" },
 ];
 
-// One-time first-run card. Rendered as a soft overlay above the editor; it does
-// not touch note content (so nothing accidental gets saved). Dismissing sets the
-// `pap.onboarded` flag in CaptureEditor.
 export default function WelcomeCard({ onDismiss }: { onDismiss: () => void }) {
   const t = useT();
   const reduce = !!useReducedMotion();

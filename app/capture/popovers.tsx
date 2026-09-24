@@ -21,12 +21,6 @@ function formatRelative(unixSeconds: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-// Motion props for the title-bar popovers. `instant` (keyboard-triggered) skips
-// the enter animation; a keyboard close skips the exit too, read from the
-// parent AnimatePresence's `custom` since the popover has unmounted by then.
-// Reduce Motion keeps the opacity fade but drops the position/scale movement.
-// Origin is the top-right trigger icons, so it scales out from the button
-// rather than from its own center.
 function usePopoverMotion(instant: boolean) {
   const reduce = !!useReducedMotion();
   const offset = reduce ? {} : { y: -4, scale: 0.97 };
@@ -90,7 +84,6 @@ export function ShortcutsPopover({ instant }: { instant: boolean }) {
   );
 }
 
-// Settings popover — currently the language picker; room for more preferences.
 export function SettingsPopover({ instant }: { instant: boolean }) {
   const t = useT();
   const { locale, setLocale } = useLocale();
@@ -152,8 +145,6 @@ export function NotesPopover({
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     onArrowKey(e);
-    // Control + Delete (or Control + Backspace, which is the main delete key on
-    // Mac) on the focused row → trigger the existing two-step delete flow.
     if (e.ctrlKey && (e.key === "Backspace" || e.key === "Delete")) {
       e.preventDefault();
       const active = document.activeElement as HTMLElement | null;
@@ -193,9 +184,6 @@ function NoteRow({
 }) {
   const t = useT();
   const reduce = !!useReducedMotion();
-  // Two-step delete: the first click arms the confirm state, which auto-disarms
-  // after 2.5s. The timer is tracked so it's cleared on unmount (the row often
-  // disappears mid-countdown after a delete) and re-armed cleanly.
   const [confirm, setConfirm] = useState(false);
   const disarm = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(

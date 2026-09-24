@@ -18,9 +18,6 @@ export function useCaptureEditor({
   onChange,
   onEscape,
 }: CaptureEditorParams): Editor | null {
-  // Refs so the editor is created once but always calls the latest callback.
-  // Without this, useEditor's onUpdate / handleKeyDown would close over the
-  // first render's props and never see updates from the parent.
   const onChangeRef = useRef(onChange);
   const onEscapeRef = useRef(onEscape);
   onChangeRef.current = onChange;
@@ -37,8 +34,6 @@ export function useCaptureEditor({
       attributes: {
         class: "tiptap",
       },
-      // Editor props run before plugin props, so an open slash menu must get
-      // Escape first or it would hide the window instead of closing the menu.
       handleKeyDown: (view, event) => {
         if (event.key === "Escape") {
           if (slashPluginKey.getState(view.state)?.active) return false;

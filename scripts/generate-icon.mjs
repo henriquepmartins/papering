@@ -1,7 +1,3 @@
-// Generate a placeholder 1024x1024 app icon as a flat rounded square in the
-// Papering accent. Sharp is already in the dep tree (transitive of Next.js).
-//
-// Run once, then `pnpm tauri icon icons/source.png` fans the sizes out.
 import sharp from "sharp";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
@@ -11,7 +7,7 @@ mkdirSync(resolve(process.cwd(), "icons"), { recursive: true });
 
 const size = 1024;
 const radius = 224;
-const accent = "#c44a3a"; // matches oklch(0.72 0.18 28) approx in sRGB
+const accent = "#c44a3a";
 const svg = `
 <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
   <defs>
