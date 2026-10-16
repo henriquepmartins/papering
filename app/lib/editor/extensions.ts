@@ -1,4 +1,5 @@
 import {
+  type Editor,
   Extension,
   type JSONContent,
   type MarkdownParseHelpers,
@@ -15,7 +16,7 @@ import { Typography } from "@tiptap/extension-typography";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import { Fragment, Slice } from "@tiptap/pm/model";
-import { Plugin } from "@tiptap/pm/state";
+import { Plugin, type Transaction } from "@tiptap/pm/state";
 import { StarterKit } from "@tiptap/starter-kit";
 
 import { getCurrentLocale } from "../i18n";
@@ -30,6 +31,7 @@ export { setAttachmentsBase } from "./extensions/markdown-image";
 const KEYMAPS = {
   highlight: "Mod-Shift-h",
   toggleTask: "Mod-Enter",
+  toggleTaskTree: "Mod-Shift-Enter",
   link: "Mod-l",
 } as const;
 
@@ -140,29 +142,68 @@ const MarkdownPaste = Extension.create({
   },
 });
 
+// A ⌘-click is followed by the checkbox's own write to the parent. History merges that write into
+// the cascade only when it touches the range of the cascade's last step, so the parent goes last
+// and uses setNodeMarkup (an attribute step carries no range).
+function toggleTask(tr: Transaction, pos: number, withChildren: boolean) {
+  const node = tr.doc.nodeAt(pos);
+  if (node?.type.name !== "taskItem") return false;
+  const checked = !node.attrs.checked;
+  if (withChildren) {
+    node.descendants((child, offset) => {
+      if (child.type.name !== "taskItem") return;
+      tr.setNodeMarkup(pos + 1 + offset, undefined, { ...child.attrs, checked });
+    });
+  }
+  tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked });
+  return true;
+}
+
+function toggleTaskAtSelection(editor: Editor, withChildren: boolean) {
+  const { $from } = editor.state.selection;
+  for (let depth = $from.depth; depth > 0; depth--) {
+    if ($from.node(depth).type.name !== "taskItem") continue;
+    const pos = $from.before(depth);
+    return editor.commands.command(({ tr }) => toggleTask(tr, pos, withChildren));
+  }
+  return false;
+}
+
 const NoteShortcuts = Extension.create({
   name: "noteShortcuts",
   priority: 1000,
   addKeyboardShortcuts() {
     return {
-      [KEYMAPS.toggleTask]: ({ editor }) => {
-        const { $from } = editor.state.selection;
-        for (let depth = $from.depth; depth > 0; depth--) {
-          const node = $from.node(depth);
-          if (node.type.name !== "taskItem") continue;
-          const pos = $from.before(depth);
-          return editor.commands.command(({ tr }) => {
-            tr.setNodeAttribute(pos, "checked", !node.attrs.checked);
-            return true;
-          });
-        }
-        return false;
-      },
+      [KEYMAPS.toggleTask]: ({ editor }) => toggleTaskAtSelection(editor, false),
+      [KEYMAPS.toggleTaskTree]: ({ editor }) => toggleTaskAtSelection(editor, true),
       [KEYMAPS.link]: ({ editor }) => {
         toggleLink(editor);
         return true;
       },
     };
+  },
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          handleDOMEvents: {
+            // Tiptap's change handler, which fires after this, then writes the same value to the
+            // parent, so the box keeps its native toggle and the cascade lands in one undo step.
+            click: (view, event) => {
+              const target = event.target;
+              if (!event.metaKey || !view.editable) return false;
+              if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") return false;
+              const content = target.closest("li")?.querySelector(":scope > div");
+              if (!content) return false;
+              const tr = view.state.tr;
+              if (!toggleTask(tr, view.posAtDOM(content, 0) - 1, true)) return false;
+              view.dispatch(tr);
+              return false;
+            },
+          },
+        },
+      }),
+    ];
   },
 });
 
